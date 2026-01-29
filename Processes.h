@@ -12,10 +12,10 @@ typedef struct _process
 	char           startArgs[MAXARG]; /* Process arguments */
 	void*		   context;           /* Process's current context */
 	short          pid;               /* Process id (pid) */
-	int            priority;
+	int            priority;			/* Process can have priority 0-5, 5 being highest priority */
 	int (*entryPoint) (void*);        /* The entry point that is called from launch */
-	char*	       stack;
-	unsigned int   stacksize;
+	char*	       stack;				/* For allocating stack memory */
+	unsigned int   stacksize;			/* Length/size of the stack */
 	int            status;            /* READY, QUIT, BLOCKED, etc. */
 
 } Process;

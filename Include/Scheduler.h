@@ -2,6 +2,7 @@
 
 #define LOWEST_PRIORITY   0
 #define HIGHEST_PRIORITY  5
+#define NUM_PRIORITIES (HIGHEST_PRIORITY + 1)
 
 #define MAXNAME           256
 #define MAXARG            256
@@ -39,3 +40,5 @@ void  dispatcher();
 int	  read_time(void);
 DWORD read_clock(void);
 
+/* Student implemented functions. */
+int clamp_priority(int);

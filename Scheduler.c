@@ -6,15 +6,28 @@
 #include "Scheduler.h"
 #include "Processes.h"
 
-Process processTable[MAX_PROCESSES];
-Process *runningProcess = NULL;
-int nextPid = 1;
+Process processTable[MAX_PROCESSES]; 
+//the process table
+Process* runningProcess = NULL; 
+//current PCB
+
+int nextPid = 1; 
+//next free pid (0 is unused)
 int debugFlag = 1;
+//to enable console output
+
+/*ready queues array which are indexed by priority 0 - 5, with 5 being the highest*/
+// static Process* readyQueue[NUM_PRIORITIES] = { NULL };
+// TO IMPLEMENT ///////////////////////////
+
+/*blocked singly-linked list of PCBs whos status != READY*/
+// static Process* blockedList = NULL;
+// TO IMPLEMENT ///////////////////////////
 
 static int watchdog(char*);
 static inline void disableInterrupts();
 void dispatcher();
-static int launch(void *);
+static int launch(void*);
 static void check_deadlock();
 static void DebugConsole(char* format, ...);
 
@@ -30,13 +43,13 @@ check_io_function check_io;
    Purpose - This is the first function called by THREADS on startup.
 
              The function must setup the OS scheduler and primitive
-             functionality and then spawn the first two processes.  
-             
-             The first two process are the watchdog process 
-             and the startup process SchedulerEntryPoint.  
-             
+             functionality and then spawn the first two processes.
+
+             The first two process are the watchdog process
+             and the startup process SchedulerEntryPoint.
+
              The statup process is used to initialize additional layers
-             of the OS.  It is also used for testing the scheduler 
+             of the OS.  It is also used for testing the scheduler
              functions.
 
    Parameters - Arguments *pArgs - these arguments are unused at this time.
@@ -46,18 +59,21 @@ check_io_function check_io;
    Side Effects - The effects of this function is the launching of the kernel.
 
  *************************************************************************/
-int bootstrap(void *pArgs)
+int bootstrap(void* pArgs)
 {
     int result; /* value returned by call to spawn() */
-
-    //////////////// Hey guys - Jonathan here!
 
     /* set this to the scheduler version of this function.*/
     check_io = check_io_scheduler;
 
     /* Initialize the process table. */
+    for (int i = 0); i < MAX_PROCESSES; i++)
+    {
+        processTable[i] = { 0 };
+    }
 
     /* Initialize the Ready list, etc. */
+    // use readyQueue array here
 
     /* Initialize the clock interrupt handler */
 
@@ -78,8 +94,9 @@ int bootstrap(void *pArgs)
     }
 
     /* Initialized and ready to go!! */
-
     /* This should never return since we are not a real process. */
+    dispatcher();
+    //We use the dispatcher here to context switch and never return
 
     stop(-3);
     return 0;
@@ -375,4 +392,16 @@ static void DebugConsole(char* format, ...)
 int check_io_scheduler()
 {
     return false;
+}
+
+/* If priority is out of bounds, this function will change it to 0 or 5*/
+static int clamp_priority(int p)
+{
+    if (p < 0)
+        return 0;
+
+    if (p >= NUM_PRIORITIES) 
+        return NUM_PRIORITIES - 1;
+    
+    return p;
 }
