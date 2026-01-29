@@ -7,6 +7,11 @@
 #include "Processes.h"
 
 #define NUM_PRIORITIES (HIGHEST_PRIORITY + 1)
+#define STATUS_READY 1
+#define STATUS_BLOCKED 2
+#define STATUS_QUIT 3
+#define STATUS_WAITING 4
+#define STATUS_JOINED 5
 
 Process processTable[MAX_PROCESSES]; 
 //The processTable array
@@ -30,6 +35,12 @@ void dispatcher();
 static int launch(void*);
 static void check_deadlock();
 static void DebugConsole(char* format, ...);
+
+//student implemented functions//
+static void   readyq_push(Process* proc);
+static Process* readyq_pop_prio(int prio);
+static Process* readyq_pop_highest(void);
+static Process* readyq_remove_pid(short pid);
 
 /* DO NOT REMOVE */
 extern int SchedulerEntryPoint(void* pArgs);
@@ -166,18 +177,40 @@ int k_spawn(char* name, int (*entryPoint)(void *), void* arg, int stacksize, int
     /* Find an empty slot in the process table */
     proc_slot = 1;  // just use 1 for now!
 
+    //traverse table via loop
     for (int i = 0; i < MAX_PROCESSES; i++)
     {
-        if (processTable[i])
+        if (processTable[i].pid == 0)
+        {
+            proc_slot = i; //if empty slot, select it
+            break;
+        }
     }
+    if (proc_slot == -1)
+    {
+        console_output(debugFlag, "k_spawn(): process table full.\n");
+        return -4;
+    }
+
+    //assign process to new slot in table
     pNewProc = &processTable[proc_slot];
 
-    /* Setup the entry in the process table. */
+    /* Setup the entry in the process table. (PCB initialization)*/
     strcpy(pNewProc->name, name);
+    pNewProc->name[MAXNAME - 1] = '\0'; //ensures both the name is within length limits and null terminated
+    pNewProc->pid = nextPid++;
+    pNewProc->priority = priority;
+    pNewProc->entryPoint = entryPoint;
+    pNewProc->stacksize = stacksize;
+    pNewProc->stack = NULL;
+    pNewProc->pParent = runningProcess;
+    pNewProc->status = STATUS_READY;
 
     /* If there is a parent process,add this to the list of children. */
     if (runningProcess != NULL)
     {
+        pNewProc->nextSiblingProcess = runningProcess->pChildren;
+        runningProcess->pChildren = pNewProc;
     }
 
     /* Add the process to the ready list. */
@@ -187,8 +220,12 @@ int k_spawn(char* name, int (*entryPoint)(void *), void* arg, int stacksize, int
     */
     pNewProc->context = context_initialize(launch, stacksize, arg);
 
-    return pNewProc->pid;
+    //Sends to the ready queue
+    readyq_push(pNewProc);
 
+    console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority);
+
+    return pNewProc->pid;
 
 } /* spawn */
 
@@ -345,7 +382,6 @@ void dispatcher()
 
     /* IMPORTANT: context switch enables interrupts. */
     context_switch(nextProcess->context);
-
 } 
 
 /**************************************************************************
@@ -412,7 +448,6 @@ static void DebugConsole(char* format, ...)
 
     }
 }
-
 
 /* there is no I/O yet, so return false. */
 int check_io_scheduler()
