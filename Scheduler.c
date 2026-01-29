@@ -78,6 +78,10 @@ int bootstrap(void* pArgs)
 
     /* Initialize the clock interrupt handler */
 
+    interrupt_handler_t* handlers;
+    handlers = get_interrupt_handlers();
+    handlers[THREADS_TIMER_INTERRUPT] = timer_handler;
+
 
     /* startup a watchdog process */
     result = k_spawn("watchdog", watchdog, NULL, THREADS_MIN_STACK_SIZE, LOWEST_PRIORITY);
