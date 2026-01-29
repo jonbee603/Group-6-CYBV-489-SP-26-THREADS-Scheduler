@@ -6,6 +6,8 @@
 #include "Scheduler.h"
 #include "Processes.h"
 
+#define NUM_PRIORITIES (HIGHEST_PRIORITY + 1)
+
 Process processTable[MAX_PROCESSES]; 
 //The processTable array
 static Process* readyList[NUM_PRIORITIES];
@@ -124,26 +126,46 @@ int k_spawn(char* name, int (*entryPoint)(void *), void* arg, int stacksize, int
     int proc_slot;
     struct _process* pNewProc;
 
-    DebugConsole("spawn(): creating process %s\n", name);
+    //comment out later?//
+    DebugConsole("k_spawn(): creating process %s\n", name);
+    ////////////////////
 
     disableInterrupts();
 
     /* Validate all of the parameters, starting with the name. */
     if (name == NULL)
     {
-        console_output(debugFlag, "spawn(): Name value is NULL.\n");
+        console_output(debugFlag, "k_spawn(): Name value is NULL.\n");
         return -1;
     }
     if (strlen(name) >= (MAXNAME - 1))
     {
-        console_output(debugFlag, "spawn(): Process name is too long.  Halting...\n");
-        stop( 1);
+        console_output(debugFlag, "k_spawn(): Process name is too long. Halting...\n");
+        stop(1);
+    }
+    if (entryPoint == NULL)
+    {
+        console_output(debugFlag, "k_spawn(): entryPoint is NULL.\n");
+        return -1;
+    }
+    if (stacksize < THREADS_MIN_STACK_SIZE)
+    {
+        console_output(debugFlag, "k_spawn(): stacksize %d < THREADS_MIN_STACK_SIZE.\n", stacksize);
+        return -2;
+    }
+    if (priority < 0 || priority > HIGHEST_PRIORITY)
+    {
+        console_output(debugFlag, "k_spawn(): invalid priority %d. Halting...\n", priority);
+        stop(1);
     }
 
-
     /* Find an empty slot in the process table */
-    
     proc_slot = 1;  // just use 1 for now!
+
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (processTable[i])
+    }
     pNewProc = &processTable[proc_slot];
 
     /* Setup the entry in the process table. */
