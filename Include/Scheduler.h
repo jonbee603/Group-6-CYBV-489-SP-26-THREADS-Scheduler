@@ -40,5 +40,10 @@ void  dispatcher();
 int	  read_time(void);
 DWORD read_clock(void);
 
-/* Student implemented functions. */
+/* Student implemented functions///////////
 int clamp_priority(int);
+void readyq_push(Process* proc);
+Process* readyq_pop_prio(int);
+Process* readyq_pop_highest(void);
+Process* readyq_remove_pid(short pid);
+*///////////////////////////

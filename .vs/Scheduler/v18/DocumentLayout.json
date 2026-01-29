@@ -7,6 +7,9 @@
       "RelativeMoniker": "D:0:0:{9C3A6259-D35E-453A-9A17-62B44C793A76}|Scheduler.vcxproj|solutionrelative:Scheduler.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\LeakBound\\OneDrive - University of Arizona\\2026\\Spring 2026\\CYBV 489 - OS Theory for Security\\Week 3\\scheduler_demo.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{9C3A6259-D35E-453A-9A17-62B44C793A76}|Scheduler.vcxproj|C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\Scheduler.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{9C3A6259-D35E-453A-9A17-62B44C793A76}|Scheduler.vcxproj|solutionrelative:Include\\Scheduler.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
@@ -15,24 +18,8 @@
       "RelativeMoniker": "D:0:0:{9C3A6259-D35E-453A-9A17-62B44C793A76}|Scheduler.vcxproj|solutionrelative:Processes.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A35E905E-C6A4-416D-9217-02C0456E5CDD}|SchedulerTestCommon\\SchedulerTestCommon.vcxproj|C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\SchedulerTestCommon\\SchedulerTestCommon.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{A35E905E-C6A4-416D-9217-02C0456E5CDD}|SchedulerTestCommon\\SchedulerTestCommon.vcxproj|solutionrelative:SchedulerTestCommon\\SchedulerTestCommon.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A35E905E-C6A4-416D-9217-02C0456E5CDD}|SchedulerTestCommon\\SchedulerTestCommon.vcxproj|C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\SchedulerTesting.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{A35E905E-C6A4-416D-9217-02C0456E5CDD}|SchedulerTestCommon\\SchedulerTestCommon.vcxproj|solutionrelative:Include\\SchedulerTesting.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A35E905E-C6A4-416D-9217-02C0456E5CDD}|SchedulerTestCommon\\SchedulerTestCommon.vcxproj|C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\bin\\RunSchedulerTests.bat||{3B902123-F8A7-4915-9F01-361F908088D0}",
-      "RelativeMoniker": "D:0:0:{A35E905E-C6A4-416D-9217-02C0456E5CDD}|SchedulerTestCommon\\SchedulerTestCommon.vcxproj|solutionrelative:bin\\RunSchedulerTests.bat||{3B902123-F8A7-4915-9F01-361F908088D0}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{4F10594A-A37F-4B06-8053-7E142CE536B5}|SchedulerTest00\\SchedulerTest00.vcxproj|C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\SchedulerTest00\\SchedulerTest00.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{4F10594A-A37F-4B06-8053-7E142CE536B5}|SchedulerTest00\\SchedulerTest00.vcxproj|solutionrelative:SchedulerTest00\\SchedulerTest00.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{9C3A6259-D35E-453A-9A17-62B44C793A76}|Scheduler.vcxproj|C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\THREADSLib.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{9C3A6259-D35E-453A-9A17-62B44C793A76}|Scheduler.vcxproj|solutionrelative:Include\\THREADSLib.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     }
   ],
   "DocumentGroupContainers": [
@@ -42,59 +29,11 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 4,
+          "SelectedChildIndex": 1,
           "Children": [
             {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "Scheduler.h",
-              "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\Scheduler.h",
-              "RelativeDocumentMoniker": "Include\\Scheduler.h",
-              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\Scheduler.h",
-              "RelativeToolTip": "Include\\Scheduler.h",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2026-01-29T14:41:12.21Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 4,
-              "Title": "SchedulerTesting.h",
-              "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\SchedulerTesting.h",
-              "RelativeDocumentMoniker": "Include\\SchedulerTesting.h",
-              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\SchedulerTesting.h",
-              "RelativeToolTip": "Include\\SchedulerTesting.h",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2026-01-29T14:36:04.066Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "RunSchedulerTests.bat",
-              "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\bin\\RunSchedulerTests.bat",
-              "RelativeDocumentMoniker": "bin\\RunSchedulerTests.bat",
-              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\bin\\RunSchedulerTests.bat*",
-              "RelativeToolTip": "bin\\RunSchedulerTests.bat*",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAMAAAAeAAAAAAAAAA==",
-              "Icon": "00000000-0000-0000-0000-000000000000.000000|iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAH/SURBVEhL7dU/aBNhHMbxby5pgjo6WK1DaGOJ8Q8qFmxBWnGxaqk4OIriWBChKTEBFam0SkEdRByEDp3VRYqKDoJSMCpW0VoaTawWXJNo7tL7XV6XKvY1ryUYB8HPcvB7n/ee9ziOg79JKaWP/j2\u002BZGIgCyqsL9SHL2fV4\u002Bb7eg5UvYIK\u002B5KJuDo7OPRTvH7OnEph6UOdKx73Hj3lzsMnuCL68pKMBSWnzJuZHNPvZ3FsB8dxyGQ/8Tg9ydeSrceNjAWTUxkyH\u002BbI5D7iiiAivHo7w\u002BzcZ569nNLjRsaCWCSM5QMRj\u002B6uHXTvakcWijZFI3rcyFiglMK2HTwRlFIopRAR/BZUVEWPGxkLXk\u002B/Wzixy83xB9y4fR9PhJJtM5F\u002BoceNjAVbNrSyZtVKNkZbEHERzyW6rplYawudHW163MhYsGL5Mjrbt7M\u002B0ozfsghYFts2x\u002Bho28rV0TGGL13Rt1QV0Ae6YLCBw4d6Abg1fpeJ9HOKxSLiztPXn2B3104O9uzXt/1gfIJqQqEQhUKBc6kBhk\u002BnyOfzKO/3L7ymAm/exZ0vo1QFpSq45TKyxNddU0FFeTT4/RyPn6TvRJxgwM\u002BXYkGPLVJTQe/ePVy7PELT6kbWNjUyNnqdY0eP6LFFair4bmRokIsXzuvjqnzJRH8WfH/8T6hO5fTJf7/4Bn2yzOdgnYQEAAAAAElFTkSuQmCC",
-              "WhenOpened": "2026-01-29T14:38:46.975Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "SchedulerTestCommon.c",
-              "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\SchedulerTestCommon\\SchedulerTestCommon.c",
-              "RelativeDocumentMoniker": "SchedulerTestCommon\\SchedulerTestCommon.c",
-              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\SchedulerTestCommon\\SchedulerTestCommon.c",
-              "RelativeToolTip": "SchedulerTestCommon\\SchedulerTestCommon.c",
-              "ViewState": "AgIAAD8AAAAAAAAAAAAAAB0AAAAFAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
-              "WhenOpened": "2026-01-29T14:36:15.914Z",
-              "EditorCaption": ""
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
             },
             {
               "$type": "Document",
@@ -102,59 +41,64 @@
               "Title": "Scheduler.c",
               "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Scheduler.c",
               "RelativeDocumentMoniker": "Scheduler.c",
-              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Scheduler.c*",
-              "RelativeToolTip": "Scheduler.c*",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA8AAAAyAAAAAAAAAA==",
+              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Scheduler.c",
+              "RelativeToolTip": "Scheduler.c",
+              "ViewState": "AgIAAJ4BAAAAAAAAAAAAAMIBAABFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
-              "WhenOpened": "2026-01-29T14:16:09.527Z",
+              "WhenOpened": "2026-01-29T21:04:06.613Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
-              "Title": "SchedulerTest00.c",
-              "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\SchedulerTest00\\SchedulerTest00.c",
-              "RelativeDocumentMoniker": "SchedulerTest00\\SchedulerTest00.c",
-              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\SchedulerTest00\\SchedulerTest00.c",
-              "RelativeToolTip": "SchedulerTest00\\SchedulerTest00.c",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "DocumentIndex": 1,
+              "Title": "scheduler_demo.c",
+              "DocumentMoniker": "C:\\Users\\LeakBound\\OneDrive - University of Arizona\\2026\\Spring 2026\\CYBV 489 - OS Theory for Security\\Week 3\\scheduler_demo.c",
+              "RelativeDocumentMoniker": "..\\..\\..\\OneDrive - University of Arizona\\2026\\Spring 2026\\CYBV 489 - OS Theory for Security\\Week 3\\scheduler_demo.c",
+              "ToolTip": "C:\\Users\\LeakBound\\OneDrive - University of Arizona\\2026\\Spring 2026\\CYBV 489 - OS Theory for Security\\Week 3\\scheduler_demo.c",
+              "RelativeToolTip": "..\\..\\..\\OneDrive - University of Arizona\\2026\\Spring 2026\\CYBV 489 - OS Theory for Security\\Week 3\\scheduler_demo.c",
+              "ViewState": "AgIAACoAAAAAAAAAAAAAAE4AAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
-              "WhenOpened": "2026-01-29T14:36:11.463Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 7,
-              "Title": "THREADSLib.h",
-              "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\THREADSLib.h",
-              "RelativeDocumentMoniker": "Include\\THREADSLib.h",
-              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\THREADSLib.h",
-              "RelativeToolTip": "Include\\THREADSLib.h",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2026-01-29T14:34:21.166Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "Processes.h",
-              "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Processes.h",
-              "RelativeDocumentMoniker": "Processes.h",
-              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Processes.h*",
-              "RelativeToolTip": "Processes.h*",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAABGAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2026-01-29T14:17:16.456Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-01-29T20:43:04.362Z"
             },
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
             },
             {
-              "$type": "Bookmark",
-              "Name": "ST:128:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "Scheduler.h",
+              "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\Scheduler.h",
+              "RelativeDocumentMoniker": "Include\\Scheduler.h",
+              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Include\\Scheduler.h",
+              "RelativeToolTip": "Include\\Scheduler.h",
+              "ViewState": "AgIAABUAAAAAAAAAAAAcwC8AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2026-01-29T15:26:20.725Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "Processes.h",
+              "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Processes.h",
+              "RelativeDocumentMoniker": "Processes.h",
+              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\Processes.h",
+              "RelativeToolTip": "Processes.h",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2026-01-29T15:29:08.754Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "SchedulerTest00.c",
+              "DocumentMoniker": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\SchedulerTest00\\SchedulerTest00.c",
+              "RelativeDocumentMoniker": "SchedulerTest00\\SchedulerTest00.c",
+              "ToolTip": "C:\\Users\\LeakBound\\source\\repos\\Group-6-CYBV-489-SP-26-THREADS-Scheduler\\SchedulerTest00\\SchedulerTest00.c",
+              "RelativeToolTip": "SchedulerTest00\\SchedulerTest00.c",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
+              "WhenOpened": "2026-01-29T15:43:03.032Z"
             }
           ]
         }

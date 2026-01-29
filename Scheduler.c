@@ -7,18 +7,16 @@
 #include "Processes.h"
 
 Process processTable[MAX_PROCESSES]; 
-//the process table
-Process* runningProcess = NULL; 
-//current PCB
+//The processTable array
+static Process* readyList[NUM_PRIORITIES];
+//readyList is an array which is indexed by priority 0 - 5, with 5 being the highest
 
+Process* runningProcess = NULL;
+//current executing PCB
 int nextPid = 1; 
 //next free pid (0 is unused)
 int debugFlag = 1;
 //to enable console output
-
-/*ready queues array which are indexed by priority 0 - 5, with 5 being the highest*/
-// static Process* readyQueue[NUM_PRIORITIES] = { NULL };
-// TO IMPLEMENT ///////////////////////////
 
 /*blocked singly-linked list of PCBs whos status != READY*/
 // static Process* blockedList = NULL;
@@ -67,15 +65,17 @@ int bootstrap(void* pArgs)
     check_io = check_io_scheduler;
 
     /* Initialize the process table. */
-    for (int i = 0); i < MAX_PROCESSES; i++)
-    {
-        processTable[i] = { 0 };
-    }
+    for (int i = 0; i < MAX_PROCESSES; i++)
+        processTable[i] = (Process){0};
+        //clears out the table
 
     /* Initialize the Ready list, etc. */
-    // use readyQueue array here
+    for (int j = 0; j < NUM_PRIORITIES; j++)
+        readyList[j] = NULL;
+        //clears the ready queue
 
     /* Initialize the clock interrupt handler */
+
 
     /* startup a watchdog process */
     result = k_spawn("watchdog", watchdog, NULL, THREADS_MIN_STACK_SIZE, LOWEST_PRIORITY);
@@ -404,4 +404,57 @@ static int clamp_priority(int p)
         return NUM_PRIORITIES - 1;
     
     return p;
+}
+
+//copied directly from scheduler_demo.c, may need to integrate to our project
+static void readyq_push(Process* proc)
+{
+    int prio = clamp_priority(proc->priority);
+    proc->nextReadyProcess = NULL;
+
+    if (readyList[prio] == NULL) {
+        readyList[prio] = proc;
+        return;
+    }
+    Process* cur = readyList[prio];
+    while (cur->nextReadyProcess) cur = cur->nextReadyProcess;
+    cur->nextReadyProcess = proc;
+}
+
+static Process* readyq_pop_prio(int prio)
+{
+    prio = clamp_priority(prio);
+    Process* head = readyList[prio];
+    if (!head) return NULL;
+    readyList[prio] = head->nextReadyProcess;
+    head->nextReadyProcess = NULL;
+    return head;
+}
+
+static Process* readyq_pop_highest(void)
+{
+    for (int p = NUM_PRIORITIES - 1; p >= 0; --p) {
+        Process* proc = readyq_pop_prio(p);
+        if (proc) return proc;
+    }
+    return NULL;
+}
+
+static Process* readyq_remove_pid(short pid)
+{
+    Process* target = &processTable[pid % MAX_PROCESSES];
+    int prio = clamp_priority(target->priority);
+    Process* prev = NULL, * cur = readyList[prio];
+
+    while (cur) {
+        if (cur == target) {
+            if (prev) prev->nextReadyProcess = cur->nextReadyProcess;
+            else      readyList[prio] = cur->nextReadyProcess;
+            cur->nextReadyProcess = NULL;
+            return cur;
+        }
+        prev = cur;
+        cur = cur->nextReadyProcess;
+    }
+    return NULL;
 }
