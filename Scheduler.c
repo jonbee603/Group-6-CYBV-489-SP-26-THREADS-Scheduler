@@ -25,8 +25,6 @@ int nextPid = 1;
 int debugFlag = 1;
 //to enable console output
 
-int timer_handler = 0;      //Timer to track process runtime - Colin
-
 /*blocked singly-linked list of PCBs whos status != READY*/
 // static Process* blockedList = NULL;
 // TO IMPLEMENT ///////////////////////////
@@ -43,6 +41,7 @@ static void   readyq_push(Process* proc);
 static Process* readyq_pop_prio(int prio);
 static Process* readyq_pop_highest(void);
 static Process* readyq_remove_pid(short pid);
+static interrupt_handler_t timer_handler();                    //Timer Handler function - Colin
 
 /* DO NOT REMOVE */
 extern int SchedulerEntryPoint(void* pArgs);
@@ -93,11 +92,8 @@ int bootstrap(void* pArgs)
 
     interrupt_handler_t* handlers;              //Handlers protoype
     handlers = get_interrupt_handlers();        //Call get_interrupt_handlers function
-    timer_handler = read_clock();               //Set timer_handler to current system clock value
-	handlers[THREADS_TIMER_INTERRUPT] = timer_handler;      
-    //Set timer interrupt index to current system clock, not sure if correctly implemented -Colin       
-
-
+	handlers[THREADS_TIMER_INTERRUPT] = timer_handler(); //Set handlers timer interrupt index to call timer handler function     
+          
     /* startup a watchdog process */
     result = k_spawn("watchdog", watchdog, NULL, THREADS_MIN_STACK_SIZE, LOWEST_PRIORITY);
     if (result < 0)
@@ -558,4 +554,14 @@ static Process* readyq_remove_pid(short pid)
         cur = cur->nextReadyProcess;
     }
     return NULL;
+}
+
+static interrupt_handler_t timer_handler()
+{
+    read_clock();       
+    return 0;
+    /* Need to implement check to see if current running process run time excess time slice given
+    of 80ms. If time exceeds 80ms, call dispatch() to evaluate if there is an equal prio
+    process ready to run. If time has not exceeded 80ms, continue process. 
+    Higher prio process should have it's own interrupt. -Colin */
 }
