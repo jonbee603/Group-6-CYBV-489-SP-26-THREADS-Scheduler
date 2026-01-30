@@ -91,7 +91,7 @@ int bootstrap(void* pArgs)
 
     interrupt_handler_t* handlers;
     handlers = get_interrupt_handlers();
-    handlers[THREADS_TIMER_INTERRUPT] = timer_handler;
+	//handlers[THREADS_TIMER_INTERRUPT] = timer_handler;       need to define timer_handler - Colin
 
 
     /* startup a watchdog process */
@@ -363,6 +363,18 @@ DWORD read_clock()
 
 void display_process_table()
 {
+    console_output(debugFlag, "\nPROCESS TABLE\n"); //Title for table print
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (processTable[i].pid != 0)
+        {
+            console_output(debugFlag, "pid=%d, priority=%d, status=%d, name=%s\n", processTable[i].pid, processTable[i].priority, processTable[i].status, processTable[i].name);
+        }
+    }
+    /*
+    Should try to map status to human readbale names plus need to figure out
+	how to display parent/child relationships and CPU time used. - Colin
+    */
 
 }
 
@@ -378,6 +390,8 @@ void display_process_table()
 *************************************************************************/
 void dispatcher()
 {
+	display_process_table();  //Displaying current results of process table before context switch -Colin
+
     Process *nextProcess = NULL;
 
     /* IMPORTANT: context switch enables interrupts. */
