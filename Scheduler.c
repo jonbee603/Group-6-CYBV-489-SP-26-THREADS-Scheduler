@@ -15,8 +15,10 @@
 
 Process processTable[MAX_PROCESSES]; 
 //The processTable array
-static Process* readyList[NUM_PRIORITIES];
+static Process* readyList[NUM_PRIORITIES][MAX_PROCESSES];
 //readyList is an array which is indexed by priority 0 - 5, with 5 being the highest
+
+//Changing ready list to an array of arrays to handle multiple processes at same priority -Colin
 
 Process* runningProcess = NULL;
 //current executing PCB
@@ -85,7 +87,8 @@ int bootstrap(void* pArgs)
 
     /* Initialize the Ready list, etc. */
     for (int j = 0; j < NUM_PRIORITIES; j++)
-        readyList[j] = NULL;
+        for(int i = 0; i < MAX_PROCESSES; i++)
+            readyList[j][i] = NULL;
         //clears the ready queue
 
     /* Initialize the clock interrupt handler */
@@ -509,11 +512,11 @@ static void readyq_push(Process* proc)
     int prio = clamp_priority(proc->priority);
     proc->nextReadyProcess = NULL;
 
-    if (readyList[prio] == NULL) {
-        readyList[prio] = proc;
+    if (readyList[prio][0] == NULL) {
+        readyList[prio][0] = proc;
         return;
     }
-    Process* cur = readyList[prio];
+    Process* cur = readyList[prio][0];
     while (cur->nextReadyProcess) cur = cur->nextReadyProcess;
     cur->nextReadyProcess = proc;
 }
@@ -521,9 +524,9 @@ static void readyq_push(Process* proc)
 static Process* readyq_pop_prio(int prio)
 {
     prio = clamp_priority(prio);
-    Process* head = readyList[prio];
+    Process* head = readyList[prio][0];
     if (!head) return NULL;
-    readyList[prio] = head->nextReadyProcess;
+    readyList[prio][0] = head->nextReadyProcess;
     head->nextReadyProcess = NULL;
     return head;
 }
@@ -541,12 +544,12 @@ static Process* readyq_remove_pid(short pid)
 {
     Process* target = &processTable[pid % MAX_PROCESSES];
     int prio = clamp_priority(target->priority);
-    Process* prev = NULL, * cur = readyList[prio];
+    Process* prev = NULL, * cur = readyList[prio][0];
 
     while (cur) {
         if (cur == target) {
             if (prev) prev->nextReadyProcess = cur->nextReadyProcess;
-            else      readyList[prio] = cur->nextReadyProcess;
+            else      readyList[prio][0] = cur->nextReadyProcess;
             cur->nextReadyProcess = NULL;
             return cur;
         }
