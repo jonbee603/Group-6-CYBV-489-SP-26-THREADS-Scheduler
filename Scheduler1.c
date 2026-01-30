@@ -15,15 +15,14 @@
 #define QUIT     4
 
 Process processTable[MAX_PROCESSES];
-Process* runningProcess = NULL;
+Process *runningProcess = NULL;
 int nextPid = 1;
 int debugFlag = 1;
-//to enable console output
 
 static int watchdog(void* dummy);
 static inline void disableInterrupts();
 void dispatcher();
-static int launch(void*);
+static int launch(void *);
 static void check_deadlock();
 static void DebugConsole(char* format, ...);
 
@@ -75,13 +74,13 @@ check_io_function check_io;
    Purpose - This is the first function called by THREADS on startup.
 
              The function must setup the OS scheduler and primitive
-             functionality and then spawn the first two processes.
-
-             The first two process are the watchdog process
-             and the startup process SchedulerEntryPoint.
-
+             functionality and then spawn the first two processes.  
+             
+             The first two process are the watchdog process 
+             and the startup process SchedulerEntryPoint.  
+             
              The statup process is used to initialize additional layers
-             of the OS.  It is also used for testing the scheduler
+             of the OS.  It is also used for testing the scheduler 
              functions.
 
    Parameters - Arguments *pArgs - these arguments are unused at this time.
@@ -91,7 +90,7 @@ check_io_function check_io;
    Side Effects - The effects of this function is the launching of the kernel.
 
  *************************************************************************/
-int bootstrap(void* pArgs)
+int bootstrap(void *pArgs)
 {
     int result; /* value returned by call to spawn() */
 
@@ -117,17 +116,13 @@ int bootstrap(void* pArgs)
         processTable[i].zombieExitCode = 0;
     }
     /* Initialize the Ready list, etc. */
-    ready_init();
-    runningProcess = NULL;
-    nextPid = 1;
+        ready_init();
+        runningProcess = NULL;
+        nextPid = 1;
 
 
     /* Initialize the clock interrupt handler */
 
-    interrupt_handler_t* handlers;              //Handlers protoype
-    handlers = get_interrupt_handlers();        //Call get_interrupt_handlers function
-	handlers[THREADS_TIMER_INTERRUPT] = timer_handler(); //Set handlers timer interrupt index to call timer handler function     
-          
     /* startup a watchdog process */
     result = k_spawn("watchdog", watchdog, NULL, THREADS_MIN_STACK_SIZE, LOWEST_PRIORITY);
     if (result < 0)
@@ -140,14 +135,13 @@ int bootstrap(void* pArgs)
     result = k_spawn("Scheduler", SchedulerEntryPoint, NULL, 2 * THREADS_MIN_STACK_SIZE, HIGHEST_PRIORITY);
     if (result < 0)
     {
-        console_output(debugFlag, "Scheduler(): spawn for SchedulerEntryPoint returned an error (%d), stopping...\n", result);
+        console_output(debugFlag,"Scheduler(): spawn for SchedulerEntryPoint returned an error (%d), stopping...\n", result);
         stop(1);
     }
 
     /* Initialized and ready to go!! */
+
     /* This should never return since we are not a real process. */
-    dispatcher();
-    //We use the dispatcher here to context switch and never return
 
     while (1)
     {
@@ -160,7 +154,7 @@ int bootstrap(void* pArgs)
    k_spawn()
 
    Purpose - spawns a new process.
-
+   
              Finds an empty entry in the process table and initializes
              information of the process.  Updates information in the
              parent process to reflect this child process creation.
@@ -168,7 +162,7 @@ int bootstrap(void* pArgs)
    Parameters - the process's entry point function, the stack size, and
                 the process's priority.
 
-   Returns - The Process ID (pid) of the new child process
+   Returns - The Process ID (pid) of the new child process 
              The function must return if the process cannot be created.
 
 ************************************************************************ */
@@ -177,16 +171,14 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     int proc_slot = -1;
     Process* pNewProc = NULL;
 
-    //comment out later?//
-    DebugConsole("k_spawn(): creating process %s\n", name);
-    ////////////////////
+    DebugConsole("spawn(): creating process %s\n", name);
 
     disableInterrupts();
 
     /* Validate all of the parameters, starting with the name. */
     if (name == NULL)
     {
-        console_output(debugFlag, "k_spawn(): Name value is NULL.\n");
+        console_output(debugFlag, "spawn(): Name value is NULL.\n");
         return -1;
     }
     if (strlen(name) >= (MAXNAME - 1))
@@ -198,21 +190,6 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     {
         console_output(debugFlag, "spawn(): entryPoint is NULL.\n");
         return -1;
-    }
-    if (entryPoint == NULL)
-    {
-        console_output(debugFlag, "k_spawn(): entryPoint is NULL.\n");
-        return -1;
-    }
-    if (stacksize < THREADS_MIN_STACK_SIZE)
-    {
-        console_output(debugFlag, "k_spawn(): stacksize %d < THREADS_MIN_STACK_SIZE.\n", stacksize);
-        return -2;
-    }
-    if (priority < 0 || priority > HIGHEST_PRIORITY)
-    {
-        console_output(debugFlag, "k_spawn(): invalid priority %d. Halting...\n", priority);
-        stop(1);
     }
 
     /* Find an empty slot in the process table */
@@ -232,7 +209,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
 
     pNewProc = &processTable[proc_slot];
 
-    /* Setup the entry in the process table. (PCB initialization)*/
+    /* Setup the entry in the process table. */
     strcpy(pNewProc->name, name);
     pNewProc->pid = (short)nextPid++;
     pNewProc->priority = priority;
@@ -276,9 +253,6 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
 
     return pNewProc->pid;
 
-    console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority);
-
-    return pNewProc->pid;
 
 } /* spawn */
 
@@ -286,7 +260,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
    Name - launch
 
    Purpose - Utility function that makes sure the environment is ready,
-             such as enabling interrupts, for the new process.
+             such as enabling interrupts, for the new process.  
 
    Parameters - none
 
@@ -316,7 +290,7 @@ static int launch(void* args)
    Purpose - Wait for a child process to quit.  Return right away if
              a child has already quit.
 
-   Parameters - Output parameter for the child's exit code.
+   Parameters - Output parameter for the child's exit code. 
 
    Returns - the pid of the quitting child, or
         -4 if the process has no children
@@ -369,13 +343,13 @@ int k_wait(int* code)
 /**************************************************************************
    Name - k_exit
 
-   Purpose - Exits a process and coordinates with the parent for cleanup
+   Purpose - Exits a process and coordinates with the parent for cleanup 
              and return of the exit code.
 
    Parameters - the code to return to the grieving parent
 
    Returns - nothing
-
+   
 *************************************************************************/
 void k_exit(int code)
 
@@ -466,7 +440,7 @@ int signaled()
 *************************************************************************/
 int read_time()
 {
-    return runningProcess->processRunTime;  //Read run time of currently running process - Colin
+    return 0;
 }
 
 /*************************************************************************
@@ -477,34 +451,8 @@ DWORD read_clock()
     return system_clock();
 }
 
-//Switch case from demo file to convert status int to string - Colin
-const char* status_name(int status) {       
-    switch (status) {
-    case STATUS_READY:      return "READY";
-    case STATUS_BLOCKED:    return "BLOCKED";
-    case STATUS_QUIT:       return "QUIT";
-    case STATUS_WAITING:    return "WAITING";
-    case STATUS_JOINED:     return "JOINED";
-    default:                return "UNKNOWN";
-    }
-}
 void display_process_table()
 {
-    console_output(debugFlag, "\nPROCESS TABLE\n"); //Title for table print
-    for (int i = 0; i < MAX_PROCESSES; i++)
-    {
-        if (processTable[i].pid != 0)
-        {
-            console_output(debugFlag, "pid=%d, priority=%d, status=%s, name=%s\n",
-                processTable[i].pid, 
-                processTable[i].priority, 
-                status_name(processTable[i].status), 
-                processTable[i].name);
-        }
-    }
-    /*
-    need to figure out how to display parent/child relationships and CPU time used. - Colin
-    */
 
 }
 
@@ -553,9 +501,8 @@ static int watchdog(void* dummy)
     {
         check_deadlock();
     }
-    console_output(debugFlag, "All processes completed!\n");        //Output message before watchdog exit - Colin
     return 0;
-}
+} 
 
 /* check to determine if deadlock has occurred... */
 static void check_deadlock()
@@ -575,7 +522,7 @@ static inline void disableInterrupts()
 
     psr = psr & ~PSR_INTERRUPTS;
 
-    set_psr(psr);
+    set_psr( psr);
 
 } /* disableInterrupts */
 
@@ -601,83 +548,9 @@ static void DebugConsole(char* format, ...)
     }
 }
 
+
 /* there is no I/O yet, so return false. */
 int check_io_scheduler()
 {
     return false;
-}
-
-/* If priority is out of bounds, this function will change it to 0 or 5*/
-static int clamp_priority(int p)
-{
-    if (p < 0)
-        return 0;
-
-    if (p >= NUM_PRIORITIES) 
-        return NUM_PRIORITIES - 1;
-    
-    return p;
-}
-
-//copied directly from scheduler_demo.c, may need to integrate to our project
-static void readyq_push(Process* proc)
-{
-    int prio = clamp_priority(proc->priority);
-    proc->nextReadyProcess = NULL;
-
-    if (readyList[prio][0] == NULL) {
-        readyList[prio][0] = proc;
-        return;
-    }
-    Process* cur = readyList[prio][0];
-    while (cur->nextReadyProcess) cur = cur->nextReadyProcess;
-    cur->nextReadyProcess = proc;
-}
-
-static Process* readyq_pop_prio(int prio)
-{
-    prio = clamp_priority(prio);
-    Process* head = readyList[prio][0];
-    if (!head) return NULL;
-    readyList[prio][0] = head->nextReadyProcess;
-    head->nextReadyProcess = NULL;
-    return head;
-}
-
-static Process* readyq_pop_highest(void)
-{
-    for (int p = NUM_PRIORITIES - 1; p >= 0; --p) {
-        Process* proc = readyq_pop_prio(p);
-        if (proc) return proc;
-    }
-    return NULL;
-}
-
-static Process* readyq_remove_pid(short pid)
-{
-    Process* target = &processTable[pid % MAX_PROCESSES];
-    int prio = clamp_priority(target->priority);
-    Process* prev = NULL, * cur = readyList[prio][0];
-
-    while (cur) {
-        if (cur == target) {
-            if (prev) prev->nextReadyProcess = cur->nextReadyProcess;
-            else      readyList[prio][0] = cur->nextReadyProcess;
-            cur->nextReadyProcess = NULL;
-            return cur;
-        }
-        prev = cur;
-        cur = cur->nextReadyProcess;
-    }
-    return NULL;
-}
-
-static interrupt_handler_t timer_handler()
-{
-    read_clock();       
-    return 0;
-    /* Need to implement check to see if current running process run time excess time slice given
-    of 80ms. If time exceeds 80ms, call dispatch() to evaluate if there is an equal prio
-    process ready to run. If time has not exceeded 80ms, continue process. 
-    Higher prio process should have it's own interrupt. -Colin */
 }
