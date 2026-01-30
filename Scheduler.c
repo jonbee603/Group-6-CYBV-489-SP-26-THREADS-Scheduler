@@ -361,6 +361,17 @@ DWORD read_clock()
     return system_clock();
 }
 
+//Switch case from demo file to convert status int to string - Colin
+const char* status_name(int status) {       
+    switch (status) {
+    case STATUS_READY:      return "READY";
+    case STATUS_BLOCKED:    return "BLOCKED";
+    case STATUS_QUIT:       return "QUIT";
+    case STATUS_WAITING:    return "WAITING";
+    case STATUS_JOINED:     return "JOINED";
+    default:                return "UNKNOWN";
+    }
+}
 void display_process_table()
 {
     console_output(debugFlag, "\nPROCESS TABLE\n"); //Title for table print
@@ -368,12 +379,15 @@ void display_process_table()
     {
         if (processTable[i].pid != 0)
         {
-            console_output(debugFlag, "pid=%d, priority=%d, status=%d, name=%s\n", processTable[i].pid, processTable[i].priority, processTable[i].status, processTable[i].name);
+            console_output(debugFlag, "pid=%d, priority=%d, status=%s, name=%s\n",
+                processTable[i].pid, 
+                processTable[i].priority, 
+                status_name(processTable[i].status), 
+                processTable[i].name);
         }
     }
     /*
-    Should try to map status to human readbale names plus need to figure out
-	how to display parent/child relationships and CPU time used. - Colin
+    need to figure out how to display parent/child relationships and CPU time used. - Colin
     */
 
 }
