@@ -8,17 +8,21 @@
 #include "Scheduler.h"
 #include "Processes.h"
 
+#define NUM_PRIORITIES 6
 #define EMPTY    0
 #define READY    1
 #define RUNNING  2
 #define BLOCKED  3
 #define QUIT     4
+#define JOINED   5
+
 
 Process processTable[MAX_PROCESSES];
 Process* runningProcess = NULL;
 int nextPid = 1;
 int debugFlag = 1;
-//to enable console output
+static Process* readyHead = NULL;
+static Process* readyTail = NULL;
 
 static int watchdog(void* dummy);
 static inline void disableInterrupts();
@@ -27,41 +31,9 @@ static int launch(void*);
 static void check_deadlock();
 static void DebugConsole(char* format, ...);
 
-static Process* readyHead = NULL;
-static Process* readyTail = NULL;
-
-static void ready_init(void)
-{
-    readyHead = readyTail = NULL;
-}
-
-static void ready_enqueue(Process* p)
-{
-    p->nextReadyProcess = NULL;
-    if (readyTail != NULL)
-    {
-        readyTail->nextReadyProcess = p;
-        readyTail = p;
-    }
-    else
-    {
-        readyHead = readyTail = p;
-    }
-}
-
-static Process* ready_dequeue(void)
-{
-    Process* p = readyHead;
-    if (p == NULL)
-        return NULL;
-
-    readyHead = p->nextReadyProcess;
-    if (readyHead == NULL)
-        readyTail = NULL;
-
-    p->nextReadyProcess = NULL;
-    return p;
-}
+static void ready_init(void);
+static void ready_enqueue(Process* p);
+static Process* ready_dequeue(void);
 
 /* DO NOT REMOVE */
 extern int SchedulerEntryPoint(void* pArgs);
@@ -121,9 +93,7 @@ int bootstrap(void* pArgs)
     runningProcess = NULL;
     nextPid = 1;
 
-
     /* Initialize the clock interrupt handler */
-
     interrupt_handler_t* handlers;              //Handlers protoype
     handlers = get_interrupt_handlers();        //Call get_interrupt_handlers function
 	handlers[THREADS_TIMER_INTERRUPT] = timer_handler(); //Set handlers timer interrupt index to call timer handler function     
@@ -477,17 +447,6 @@ DWORD read_clock()
     return system_clock();
 }
 
-//Switch case from demo file to convert status int to string - Colin
-const char* status_name(int status) {       
-    switch (status) {
-    case STATUS_READY:      return "READY";
-    case STATUS_BLOCKED:    return "BLOCKED";
-    case STATUS_QUIT:       return "QUIT";
-    case STATUS_WAITING:    return "WAITING";
-    case STATUS_JOINED:     return "JOINED";
-    default:                return "UNKNOWN";
-    }
-}
 void display_process_table()
 {
     console_output(debugFlag, "\nPROCESS TABLE\n"); //Title for table print
@@ -619,59 +578,6 @@ static int clamp_priority(int p)
     return p;
 }
 
-//copied directly from scheduler_demo.c, may need to integrate to our project
-static void readyq_push(Process* proc)
-{
-    int prio = clamp_priority(proc->priority);
-    proc->nextReadyProcess = NULL;
-
-    if (readyList[prio][0] == NULL) {
-        readyList[prio][0] = proc;
-        return;
-    }
-    Process* cur = readyList[prio][0];
-    while (cur->nextReadyProcess) cur = cur->nextReadyProcess;
-    cur->nextReadyProcess = proc;
-}
-
-static Process* readyq_pop_prio(int prio)
-{
-    prio = clamp_priority(prio);
-    Process* head = readyList[prio][0];
-    if (!head) return NULL;
-    readyList[prio][0] = head->nextReadyProcess;
-    head->nextReadyProcess = NULL;
-    return head;
-}
-
-static Process* readyq_pop_highest(void)
-{
-    for (int p = NUM_PRIORITIES - 1; p >= 0; --p) {
-        Process* proc = readyq_pop_prio(p);
-        if (proc) return proc;
-    }
-    return NULL;
-}
-
-static Process* readyq_remove_pid(short pid)
-{
-    Process* target = &processTable[pid % MAX_PROCESSES];
-    int prio = clamp_priority(target->priority);
-    Process* prev = NULL, * cur = readyList[prio][0];
-
-    while (cur) {
-        if (cur == target) {
-            if (prev) prev->nextReadyProcess = cur->nextReadyProcess;
-            else      readyList[prio][0] = cur->nextReadyProcess;
-            cur->nextReadyProcess = NULL;
-            return cur;
-        }
-        prev = cur;
-        cur = cur->nextReadyProcess;
-    }
-    return NULL;
-}
-
 static interrupt_handler_t timer_handler()
 {
     read_clock();       
@@ -680,4 +586,36 @@ static interrupt_handler_t timer_handler()
     of 80ms. If time exceeds 80ms, call dispatch() to evaluate if there is an equal prio
     process ready to run. If time has not exceeded 80ms, continue process. 
     Higher prio process should have it's own interrupt. -Colin */
+}
+static void ready_init(void)
+{
+    readyHead = readyTail = NULL;
+}
+
+static void ready_enqueue(Process* p)
+{
+    p->nextReadyProcess = NULL;
+    if (readyTail != NULL)
+    {
+        readyTail->nextReadyProcess = p;
+        readyTail = p;
+    }
+    else
+    {
+        readyHead = readyTail = p;
+    }
+}
+
+static Process* ready_dequeue(void)
+{
+    Process* p = readyHead;
+    if (p == NULL)
+        return NULL;
+
+    readyHead = p->nextReadyProcess;
+    if (readyHead == NULL)
+        readyTail = NULL;
+
+    p->nextReadyProcess = NULL;
+    return p;
 }
