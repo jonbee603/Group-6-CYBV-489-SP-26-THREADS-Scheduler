@@ -409,6 +409,13 @@ void dispatcher()
     Process *nextProcess = NULL;
 
     /* IMPORTANT: context switch enables interrupts. */
+    
+    /*
+    context_switch(runningProcess->nextReadyProcess);
+    Tried context switch from running process to next ready process being pointed
+    to by running process, but running process is NULL
+    */
+    
     context_switch(nextProcess->context);
 } 
 
