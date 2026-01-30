@@ -25,6 +25,8 @@ int nextPid = 1;
 int debugFlag = 1;
 //to enable console output
 
+int timer_handler = 0;      //Timer to track process runtime - Colin
+
 /*blocked singly-linked list of PCBs whos status != READY*/
 // static Process* blockedList = NULL;
 // TO IMPLEMENT ///////////////////////////
@@ -89,9 +91,11 @@ int bootstrap(void* pArgs)
 
     /* Initialize the clock interrupt handler */
 
-    interrupt_handler_t* handlers;
-    handlers = get_interrupt_handlers();
-	//handlers[THREADS_TIMER_INTERRUPT] = timer_handler;       need to define timer_handler - Colin
+    interrupt_handler_t* handlers;              //Handlers protoype
+    handlers = get_interrupt_handlers();        //Call get_interrupt_handlers function
+    timer_handler = read_clock();               //Set timer_handler to current system clock value
+	handlers[THREADS_TIMER_INTERRUPT] = timer_handler;      
+    //Set timer interrupt index to current system clock, not sure if correctly implemented -Colin       
 
 
     /* startup a watchdog process */
@@ -350,7 +354,7 @@ int signaled()
 *************************************************************************/
 int read_time()
 {
-    return 0;
+    return runningProcess->processRunTime;  //Read run time of currently running process - Colin
 }
 
 /*************************************************************************
@@ -437,6 +441,7 @@ static int watchdog(char* dummy)
     {
         check_deadlock();
     }
+    console_output(debugFlag, "All processes completed!\n");        //Output message before watchdog exit - Colin
     return 0;
 } 
 
