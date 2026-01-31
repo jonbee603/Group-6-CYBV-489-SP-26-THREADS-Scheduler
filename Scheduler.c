@@ -28,7 +28,7 @@ static inline void disableInterrupts();
 static inline void enableInterrupts();
 void dispatcher();
 static int launch(void*);
-static int check_deadlock();
+static void check_deadlock();
 static void DebugConsole(char* format, ...);
 
 // Group 6 Prototypes
@@ -541,8 +541,13 @@ static void watchdog()
    Returns - 1 if watchdog is alive, 0 if something is running
    *************************************************************************/
 
-static int check_deadlock()
+static void check_deadlock()
 {
+    if (check_io() == 1)
+    {
+        return;
+    }
+
     for (int i = 0; i < MAX_PROCESSES; i++)
     {
         //skip empty slots and watchdog
@@ -551,10 +556,10 @@ static int check_deadlock()
 
         //processes are running, return 0 = not idle
         if (processTable[i].status != QUIT)
-            return 0;
+            stop(0);
     } 
     //only watchdog is alive
-    return 1;
+    stop(1);
 }
 
 /*
