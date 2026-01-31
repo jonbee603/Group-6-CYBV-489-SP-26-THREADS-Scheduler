@@ -247,6 +247,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     /* Add the process to the ready list. */
     ready_enqueue(pNewProc);
 
+    //check_deadlock();     //testline - Added this to test and see if deadlock would return with processes still active
     //console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority); //test line
     //display_ready_queues(); //test line
 
@@ -522,11 +523,8 @@ static void watchdog()
     //DebugConsole("watchdog(): called\n"); //test line
     while (1)
     {
-        if (check_deadlock()) //system idles here
-        {
-            console_output(debugFlag, "All processes completed.\n");
-            stop(0);    //HALTING kernel
-        }
+        check_deadlock(); //system idles here
+        
         //timer keeps program alive if processes are running
     }
 }
@@ -547,19 +545,22 @@ static void check_deadlock()
     {
         return;
     }
-
-    for (int i = 0; i < MAX_PROCESSES; i++)
+    //display_process_table();  //testline
+    for (int i = 1; i < MAX_PROCESSES; i++)     //Starts indexing after watchdog
     {
         //skip empty slots and watchdog
-        if (processTable[i].pid <= 1)
-            continue;
-
-        //processes are running, return 0 = not idle
-        if (processTable[i].status != QUIT)
+        if (processTable[0].status == RUNNING && processTable[i].status != RUNNING) //Check if watchdog is the only process running
+        {
+            console_output(debugFlag, "All processes completed.\n");
             stop(0);
+        }
+
+        //processes are running, return = not idle
+        else
+        {
+            return;
+        }
     } 
-    //only watchdog is alive
-    stop(1);
 }
 
 /*
