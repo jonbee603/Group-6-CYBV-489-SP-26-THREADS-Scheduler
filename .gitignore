@@ -63,3 +63,13 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+/.vs/Scheduler/v18/Browse.VC.db
+/.vs/Scheduler/v18/Browse.VC.db-shm
+/.vs/Scheduler/v18/HierarchyCache.v1.txt
+/.vs/Scheduler/v18/Solution.VC.db
+/.vs/Scheduler/v18/Solution.VC.db-shm
+/.vs/Scheduler/v18/ipch/AutoPCH/c60edc432e602f98/SCHEDULERTEST21.ipch
+/.vs/Scheduler/v18/ipch/AutoPCH/2d05b6e5d5edae61/SCHEDULER.ipch
+/.vs/Scheduler/FileContentIndex/99a175ce-cb2b-4364-b080-a6e6ea4a1d8b.vsidx
+/Processes1.h
+/Scheduler1.c
