@@ -16,7 +16,6 @@
 #define QUIT     4
 #define JOINED   5
 
-
 Process processTable[MAX_PROCESSES];
 Process* runningProcess = NULL;
 int nextPid = 1;
@@ -24,20 +23,21 @@ int debugFlag = 1;
 static Process* readyHead = NULL;
 static Process* readyTail = NULL;
 
-static int watchdog(void* dummy);
+static void watchdog();
 static inline void disableInterrupts();
 static inline void enableInterrupts();
 void dispatcher();
 static int launch(void*);
-static void check_deadlock();
+static int check_deadlock();
 static void DebugConsole(char* format, ...);
 
+// Group 6 Prototypes
+static int clamp_priority(int p);
 Process* ready_queues[NUM_PRIORITIES];
 void ready_queue_init(void);
 void ready_enqueue(Process* p);
 Process* ready_dequeue(void);
 void display_ready_queues(void);
-
 static interrupt_handler_t timer_handler();
 const char* status_name(int);
 
@@ -45,7 +45,6 @@ const char* status_name(int);
 extern int SchedulerEntryPoint(void* pArgs);
 int check_io_scheduler();
 check_io_function check_io;
-
 
 /*************************************************************************
    bootstrap()
@@ -121,16 +120,13 @@ int bootstrap(void* pArgs)
     }
 
     /* Initialized and ready to go!! */
-	display_process_table();
+	//display_process_table(); //test line
     /* This should never return since we are not a real process. */
     dispatcher();
     //We use the dispatcher here to context switch and never return
 
-    while (1)
-    {
-        dispatcher();
-    }
-
+    //stop(-3)
+    return 0;
 }
 
 /*************************************************************************
@@ -155,11 +151,10 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     Process* pNewProc = NULL;
 
     //comment out later?//
-    DebugConsole("k_spawn(): creating process %s\n", name);
-    ////////////////////
+    //DebugConsole("k_spawn(): creating process %s\n", name); //test line
 
     disableInterrupts();
-	console_output(debugFlag, "Interrupts disabled!\n");        //Can comment out later - Colin
+	//console_output(debugFlag, "Interrupts disabled!\n"); //test line
 
     /* Validate all of the parameters, starting with the name. */
     if (name == NULL)
@@ -169,12 +164,12 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     }
     if (strlen(name) >= (MAXNAME - 1))
     {
-        console_output(debugFlag, "spawn(): Process name is too long.  Halting...\n");
+        console_output(debugFlag, "k_spawn(): Process name is too long.  Halting...\n");
         stop(1);
     }
     if (entryPoint == NULL)
     {
-        console_output(debugFlag, "spawn(): entryPoint is NULL.\n");
+        console_output(debugFlag, "k_spawn(): entryPoint is NULL.\n");
         return -1;
     }
     if (entryPoint == NULL)
@@ -191,7 +186,6 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     {
         console_output(debugFlag, "k_spawn(): invalid priority %d. Calling priority clamp\n", priority);
 		clamp_priority(priority);           //Clamp priority to valid range - Colin
-        //stop(1);
     }
 
     /* Find an empty slot in the process table */
@@ -205,7 +199,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     }
     if (proc_slot < 0)
     {
-        console_output(debugFlag, "spawn(): No empty slot in process table.\n");
+        console_output(debugFlag, "k_spawn(): No empty slot in process table.\n");
         return -1;
     }
 
@@ -244,7 +238,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     pNewProc->context = context_initialize(launch, stacksize, arg);
     if (pNewProc->context == NULL)
     {
-        console_output(debugFlag, "spawn(): context_initialize failed.\n");
+        console_output(debugFlag, "k_spawn(): context_initialize failed.\n");
         pNewProc->pid = -1;
         pNewProc->status = EMPTY;
         return -1;
@@ -253,8 +247,8 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     /* Add the process to the ready list. */
     ready_enqueue(pNewProc);
 
-    console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority);
-    display_ready_queues();
+    //console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority); //test line
+    //display_ready_queues(); //test line
 
     return pNewProc->pid;
 
@@ -272,13 +266,11 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
 *************************************************************************/
 static int launch(void* args)
 {
-    DebugConsole("launch(): started: %s\n", runningProcess->name);
-    
-
+    //DebugConsole("launch(): started: %s\n", runningProcess->name); //test line
 
     /* Enable interrupts */
 	enableInterrupts();
-	console_output(debugFlag, "Interrupts enabled!\n");         //Can comment out later - Colin
+	//console_output(debugFlag, "Interrupts enabled!\n");         //test line
 
     /* Call the function passed to spawn and capture its return value */
     int rc = runningProcess->entryPoint(runningProcess->args);
@@ -290,7 +282,6 @@ static int launch(void* args)
 
     return 0;
 }
-
 
 /**************************************************************************
    Name - k_wait
@@ -526,20 +517,44 @@ void dispatcher()
 
    Returns - nothing
    *************************************************************************/
-static int watchdog(void* dummy)
+static void watchdog()
 {
-    DebugConsole("watchdog(): called\n");
+    //DebugConsole("watchdog(): called\n"); //test line
     while (1)
     {
-        check_deadlock();
+        if (check_deadlock()) //system idles here
+        {
+            console_output(debugFlag, "All processes completed.\n");
+            stop(0);    //HALTING kernel
+        }
+        //timer keeps program alive if processes are running
     }
-    console_output(debugFlag, "All processes completed!\n");        //Output message before watchdog exit - Colin
-    return 0;
 }
 
-/* check to determine if deadlock has occurred... */
-static void check_deadlock()
+/*********************************
+    Name - check_deadlock()
+
+   Purpose - Checks if deadlock has occurred by traversing the processTable pids
+
+   Parameters - none
+
+   Returns - 1 if watchdog is alive, 0 if something is running
+   *************************************************************************/
+
+static int check_deadlock()
 {
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        //skip empty slots and watchdog
+        if (processTable[i].pid <= 1)
+            continue;
+
+        //processes are running, return 0 = not idle
+        if (processTable[i].status != QUIT)
+            return 0;
+    } 
+    //only watchdog is alive
+    return 1;
 }
 
 /*
