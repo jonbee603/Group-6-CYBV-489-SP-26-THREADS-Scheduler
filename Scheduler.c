@@ -34,6 +34,8 @@ static void DebugConsole(char* format, ...);
 static void ready_init(void);
 static void ready_enqueue(Process* p);
 static Process* ready_dequeue(void);
+static interrupt_handler_t timer_handler();
+const char* status_name(int);
 
 /* DO NOT REMOVE */
 extern int SchedulerEntryPoint(void* pArgs);
@@ -115,6 +117,7 @@ int bootstrap(void* pArgs)
     }
 
     /* Initialized and ready to go!! */
+	display_process_table();
     /* This should never return since we are not a real process. */
     dispatcher();
     //We use the dispatcher here to context switch and never return
@@ -445,6 +448,18 @@ int read_time()
 DWORD read_clock()
 {
     return system_clock();
+}
+
+const char* status_name(int st) {
+    switch (st) {
+	case EMPTY:   return "EMPTY";
+    case READY:   return "READY";
+	case RUNNING: return "RUNNING";
+    case BLOCKED: return "BLOCKED";
+	case QUIT:    return "QUIT";
+	case JOINED:   return "JOINED";
+    default:      return "UNKNOWN";
+    }
 }
 
 void display_process_table()
