@@ -26,6 +26,7 @@ static Process* readyTail = NULL;
 
 static int watchdog(void* dummy);
 static inline void disableInterrupts();
+static inline void enableInterrupts();
 void dispatcher();
 static int launch(void*);
 static void check_deadlock();
@@ -184,8 +185,9 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     }
     if (priority < 0 || priority > HIGHEST_PRIORITY)
     {
-        console_output(debugFlag, "k_spawn(): invalid priority %d. Halting...\n", priority);
-        stop(1);
+        console_output(debugFlag, "k_spawn(): invalid priority %d. Calling priority clamp\n", priority);
+		clamp_priority(priority);           //Clamp priority to valid range - Colin
+        //stop(1);
     }
 
     /* Find an empty slot in the process table */
@@ -247,8 +249,6 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     /* Add the process to the ready list. */
     ready_enqueue(pNewProc);
 
-    return pNewProc->pid;
-
     console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority);
 
     return pNewProc->pid;
@@ -270,6 +270,7 @@ static int launch(void* args)
     DebugConsole("launch(): started: %s\n", runningProcess->name);
 
     /* Enable interrupts */
+	enableInterrupts();
 
     /* Call the function passed to spawn and capture its return value */
     int rc = runningProcess->entryPoint(runningProcess->args);
@@ -467,7 +468,7 @@ void display_process_table()
     console_output(debugFlag, "\nPROCESS TABLE\n"); //Title for table print
     for (int i = 0; i < MAX_PROCESSES; i++)
     {
-        if (processTable[i].pid != 0)
+        if (processTable[i].pid != -1)
         {
             console_output(debugFlag, "pid=%d, priority=%d, status=%s, name=%s\n",
                 processTable[i].pid,
@@ -552,6 +553,20 @@ static inline void disableInterrupts()
     set_psr(psr);
 
 } /* disableInterrupts */
+
+static inline void enableInterrupts()
+{
+
+    /* We ARE in kernel mode */
+
+
+    int psr = get_psr();
+
+    psr = psr | PSR_INTERRUPTS;
+
+    set_psr(psr);
+
+} /* enableInterrupts function - Colin */
 
 /**************************************************************************
    Name - DebugConsole
