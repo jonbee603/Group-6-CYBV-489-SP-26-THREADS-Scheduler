@@ -23,6 +23,8 @@ int debugFlag = 1;
 static Process* readyHead = NULL;
 static Process* readyTail = NULL;
 
+int runTimeStart = 0;
+
 static void watchdog();
 static inline void disableInterrupts();
 static inline void enableInterrupts();
@@ -40,6 +42,8 @@ Process* ready_dequeue(void);
 void display_ready_queues(void);
 static interrupt_handler_t timer_handler();
 const char* status_name(int);
+int read_time();
+int get_start_time();
 
 /* DO NOT REMOVE */
 extern int SchedulerEntryPoint(void* pArgs);
@@ -357,6 +361,8 @@ void k_exit(int code)
     runningProcess->exitCode = code;
     runningProcess->status = QUIT;
 
+    runningProcess->processRunTime = read_time();   //Update process run time upon quitting
+
     /* If we have a parent, notify it so k_wait() can return the status. */
     if (runningProcess->pParent != NULL)
     {
@@ -440,7 +446,25 @@ int signaled()
 *************************************************************************/
 int read_time()
 {
-    return runningProcess->processRunTime;  //Read run time of currently running process - Colin
+    if (runningProcess == NULL) //If running process is null return -1 for time
+    {
+        return -1;
+    }
+    if (runningProcess != NULL)
+    {
+        int currentrunTime = (read_clock() / 1000) - runTimeStart;  //Current time program has been running in ms
+        runningProcess->processRunTime = currentrunTime;    //Set process run time to current run time in ms
+        //console_output(debugFlag, "Current run time for %s is %d\n", runningProcess->name, currentrunTime); //testline
+        return runningProcess->processRunTime;   //Return run time of currently running process in ms
+    }
+   
+}
+
+int get_start_time()
+{
+    runTimeStart = (read_clock() / 1000); //Reads clock and divides by 1000 for time in ms
+    //console_output(debugFlag, "Starting run time for %s is %d \n", runningProcess->name, runTimeStart); //testline
+    return runTimeStart;    //Return start time in ms
 }
 
 /*************************************************************************
@@ -470,15 +494,16 @@ void display_process_table()
     {
         if (processTable[i].pid != -1)
         {
-            console_output(debugFlag, "pid=%d, priority=%d, status=%s, name=%s\n",
+            console_output(debugFlag, "pid=%d, priority=%d, status=%s, name=%s, run time=%d\n",
                 processTable[i].pid,
                 processTable[i].priority,
                 status_name(processTable[i].status),
-                processTable[i].name);
+                processTable[i].name,
+                processTable[i].processRunTime);
         }
     }
     /*
-    need to figure out how to display parent/child relationships and CPU time used. - Colin
+    need to figure out how to display parent/child relationships. - Colin
     */
 
 }
@@ -500,6 +525,7 @@ void dispatcher()
     if (runningProcess != NULL)
     {
         runningProcess->status = RUNNING;
+        get_start_time(); //Calls get start time at beginning of process run
     }
         
     /* IMPORTANT: context switch enables interrupts. */
@@ -552,6 +578,8 @@ static void check_deadlock()
         if (processTable[0].status == RUNNING && processTable[i].status != RUNNING) //Check if watchdog is the only process running
         {
             console_output(debugFlag, "All processes completed.\n");
+            runningProcess->processRunTime = read_time();
+            //display_process_table(); //testline
             stop(0);
         }
 
@@ -638,10 +666,12 @@ static interrupt_handler_t timer_handler()
 {
     read_clock();
     return 0;
-    /* Need to implement check to see if current running process run time excess time slice given
-    of 80ms. If time exceeds 80ms, call dispatch() to evaluate if there is an equal prio
-    process ready to run. If time has not exceeded 80ms, continue process.
-    Higher prio process should have it's own interrupt. -Colin */
+    /* TO DO: Implement call to dispatcher if run time exceeds time slice of 80ms upon checking.
+       if (read_time >= 80)
+       {
+       dispatcher();
+       }
+    */
 }
 void ready_queue_init(void)
 {
