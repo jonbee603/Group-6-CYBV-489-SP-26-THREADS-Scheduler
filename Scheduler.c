@@ -503,16 +503,13 @@ void display_process_table()
 *************************************************************************/
 void dispatcher()
 {
-    Process* nextProcess = ready_dequeue();
+	runningProcess = ready_dequeue();
 
-    if (nextProcess == NULL)
+    if (runningProcess != NULL)
     {
-        return;
+        runningProcess->status = RUNNING;
     }
-
-    runningProcess = nextProcess;
-    runningProcess->status = RUNNING;
-
+        
     /* IMPORTANT: context switch enables interrupts. */
     context_switch(runningProcess->context);
 }
@@ -655,13 +652,13 @@ void ready_enqueue(Process* p)
 
 Process* ready_dequeue(void)
 {
-    for (int prio = 0; prio < NUM_PRIORITIES; prio++)
+	for (int prio = NUM_PRIORITIES - 1; prio >= 0; prio--)  //Dequeues from highest priority queue first
     {
-        if (ready_queues[prio] != NULL)
+		if (ready_queues[prio] != NULL)                     //If queue is not empty
         {
-            Process* p = ready_queues[prio];
-            ready_queues[prio] = p->nextReadyProcess;
-            p->nextReadyProcess = NULL;
+			Process* p = ready_queues[prio];                //Get process at head of queue
+			ready_queues[prio] = p->nextReadyProcess;       //Update head to next process in queue
+			p->nextReadyProcess = NULL;                     //Clear next pointer of dequeued process
             return p;
         }
     }
