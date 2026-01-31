@@ -32,9 +32,12 @@ static int launch(void*);
 static void check_deadlock();
 static void DebugConsole(char* format, ...);
 
-static void ready_init(void);
-static void ready_enqueue(Process* p);
-static Process* ready_dequeue(void);
+Process* ready_queues[NUM_PRIORITIES];
+void ready_queue_init(void);
+void ready_enqueue(Process* p);
+Process* ready_dequeue(void);
+void display_ready_queues(void);
+
 static interrupt_handler_t timer_handler();
 const char* status_name(int);
 
@@ -92,7 +95,7 @@ int bootstrap(void* pArgs)
         processTable[i].zombieExitCode = 0;
     }
     /* Initialize the Ready list, etc. */
-    ready_init();
+    ready_queue_init();
     runningProcess = NULL;
     nextPid = 1;
 
@@ -156,6 +159,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     ////////////////////
 
     disableInterrupts();
+	console_output(debugFlag, "Interrupts disabled!\n");        //Can comment out later - Colin
 
     /* Validate all of the parameters, starting with the name. */
     if (name == NULL)
@@ -250,6 +254,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     ready_enqueue(pNewProc);
 
     console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority);
+    display_ready_queues();
 
     return pNewProc->pid;
 
@@ -268,9 +273,12 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
 static int launch(void* args)
 {
     DebugConsole("launch(): started: %s\n", runningProcess->name);
+    
+
 
     /* Enable interrupts */
 	enableInterrupts();
+	console_output(debugFlag, "Interrupts enabled!\n");         //Can comment out later - Colin
 
     /* Call the function passed to spawn and capture its return value */
     int rc = runningProcess->entryPoint(runningProcess->args);
@@ -617,35 +625,67 @@ static interrupt_handler_t timer_handler()
     process ready to run. If time has not exceeded 80ms, continue process.
     Higher prio process should have it's own interrupt. -Colin */
 }
-static void ready_init(void)
+void ready_queue_init(void)
 {
-    readyHead = readyTail = NULL;
+    for(int i = 0; i < NUM_PRIORITIES; i++)
+    {
+        ready_queues[i] = NULL;
+	}
 }
 
-static void ready_enqueue(Process* p)
+void ready_enqueue(Process* p)
 {
+    int prio = p->priority;
     p->nextReadyProcess = NULL;
-    if (readyTail != NULL)
+
+    if (ready_queues[prio] == NULL)
     {
-        readyTail->nextReadyProcess = p;
-        readyTail = p;
+        ready_queues[prio] = p;
     }
     else
     {
-        readyHead = readyTail = p;
+		Process* current = ready_queues[prio];
+        while (current->nextReadyProcess != NULL)
+        {
+            current = current->nextReadyProcess;
+        }
+		current->nextReadyProcess = p;
     }
 }
 
-static Process* ready_dequeue(void)
+Process* ready_dequeue(void)
 {
-    Process* p = readyHead;
-    if (p == NULL)
-        return NULL;
+    for (int prio = 0; prio < NUM_PRIORITIES; prio++)
+    {
+        if (ready_queues[prio] != NULL)
+        {
+            Process* p = ready_queues[prio];
+            ready_queues[prio] = p->nextReadyProcess;
+            p->nextReadyProcess = NULL;
+            return p;
+        }
+    }
+	return NULL;
+}
+void display_ready_queues(void) {
+	console_output(debugFlag, "\nREADY QUEUES:\n");
+    for (int prio = 0; prio < NUM_PRIORITIES; prio++) 
+    {
+        console_output(debugFlag,"Priority %d: ", prio);
+        Process* current = ready_queues[prio];
 
-    readyHead = p->nextReadyProcess;
-    if (readyHead == NULL)
-        readyTail = NULL;
+        if (current == NULL) 
+        {
+            console_output(debugFlag,"EMPTY\n");
+            continue;
+        }
 
-    p->nextReadyProcess = NULL;
-    return p;
+        while (current != NULL) 
+        {
+            console_output(debugFlag,"[PID=%d %s] -> ", current->pid, current->name);
+            current = current->nextReadyProcess;
+        }
+
+        console_output(debugFlag,"NULL\n");
+    }
 }
