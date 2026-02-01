@@ -33,7 +33,7 @@ int debugFlag = 1;
 int runTimeStart = 0;
 
 /* Group 6 Prototypes */
-int boostrap(void*);
+int bootstrap(void*);
 int k_spawn(char*, int (*entryPoint)(void*), void*, int, int);
 static int launch(void*);
 int k_wait(int*);
