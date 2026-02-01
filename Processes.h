@@ -1,8 +1,8 @@
 /**************************************************************************
 		Processes.h Implementation for Phase 1 of the THREADS Project
 
-					CYBV 489 - SP 26 - Professor Li Xu
-		   Group 6:Lexi Lamaide, Colin Martin, Jonathan Bergeron
+					CYBV 489 - SP 26: Professor Li Xu
+		   Group 6: Lexi Lamaide, Colin Martin, Jonathan Bergeron
 *************************************************************************/
 #pragma once
 
