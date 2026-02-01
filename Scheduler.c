@@ -1,4 +1,9 @@
+/**************************************************************************
+        Scheduler.c Implementation for Phase 1 of the THREADS Project
 
+                    CYBV 489 - SP 26 - Professor Li Xu
+           Group 6:Lexi Lamaide, Colin Martin, Jonathan Bergeron
+*************************************************************************/
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <stdio.h>
@@ -22,7 +27,6 @@ int nextPid = 1;
 int debugFlag = 1;
 static Process* readyHead = NULL;
 static Process* readyTail = NULL;
-
 int runTimeStart = 0;
 
 static void watchdog();
@@ -33,7 +37,7 @@ static int launch(void*);
 static void check_deadlock();
 static void DebugConsole(char* format, ...);
 
-// Group 6 Prototypes
+//Group 6 Prototypes
 static int clamp_priority(int p);
 Process* ready_queues[NUM_PRIORITIES];
 void ready_queue_init(void);
@@ -70,7 +74,6 @@ check_io_function check_io;
    Returns - The function does not return!
 
    Side Effects - The effects of this function is the launching of the kernel.
-
  *************************************************************************/
 int bootstrap(void* pArgs)
 {
@@ -97,6 +100,7 @@ int bootstrap(void* pArgs)
         processTable[i].zombiePid = -1;
         processTable[i].zombieExitCode = 0;
     }
+    
     /* Initialize the Ready list, etc. */
     ready_queue_init();
     runningProcess = NULL;
@@ -124,12 +128,12 @@ int bootstrap(void* pArgs)
     }
 
     /* Initialized and ready to go!! */
-	//display_process_table(); //test line
+	//display_process_table();  //test line
+
     /* This should never return since we are not a real process. */
     dispatcher();
-    //We use the dispatcher here to context switch and never return
 
-    //stop(-3)
+    stop(-3);
     return 0;
 }
 
@@ -147,18 +151,16 @@ int bootstrap(void* pArgs)
 
    Returns - The Process ID (pid) of the new child process
              The function must return if the process cannot be created.
-
-************************************************************************ */
+*************************************************************************/
 int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int priority)
 {
     int proc_slot = -1;
     Process* pNewProc = NULL;
 
-    //comment out later?//
-    //DebugConsole("k_spawn(): creating process %s\n", name); //test line
+    //DebugConsole("k_spawn(): creating process %s\n", name);   //test line
 
     disableInterrupts();
-	//console_output(debugFlag, "Interrupts disabled!\n"); //test line
+	//console_output(debugFlag, "Interrupts disabled!\n");      //test line
 
     /* Validate all of the parameters, starting with the name. */
     if (name == NULL)
@@ -189,7 +191,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     if (priority < 0 || priority > HIGHEST_PRIORITY)
     {
         console_output(debugFlag, "k_spawn(): invalid priority %d. Calling priority clamp\n", priority);
-		clamp_priority(priority);           //Clamp priority to valid range - Colin
+		clamp_priority(priority);           
     }
 
     /* Find an empty slot in the process table */
@@ -209,7 +211,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
 
     pNewProc = &processTable[proc_slot];
 
-    /* Setup the entry in the process table. (PCB initialization)*/
+    /* Setup the entry in the process table. (PCB initialization) */
     strcpy(pNewProc->name, name);
     pNewProc->pid = (short)nextPid++;
     pNewProc->priority = priority;
@@ -251,13 +253,12 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     /* Add the process to the ready list. */
     ready_enqueue(pNewProc);
 
-    //check_deadlock();     //testline - Added this to test and see if deadlock would return with processes still active
-    //console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority); //test line
-    //display_ready_queues(); //test line
+    //check_deadlock();                                                                                                             //testline - Added this to test and see if deadlock would return with processes still active
+    //console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority);    //test line
+    //display_ready_queues();                                                                                                       //test line
 
     return pNewProc->pid;
-
-} /* spawn */
+}
 
 /**************************************************************************
    Name - launch
@@ -271,11 +272,12 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
 *************************************************************************/
 static int launch(void* args)
 {
-    //DebugConsole("launch(): started: %s\n", runningProcess->name); //test line
+    //DebugConsole("launch(): started: %s\n", runningProcess->name);    //test line
 
     /* Enable interrupts */
 	enableInterrupts();
-	//console_output(debugFlag, "Interrupts enabled!\n");         //test line
+
+	//console_output(debugFlag, "Interrupts enabled!\n");               //test line
 
     /* Call the function passed to spawn and capture its return value */
     int rc = runningProcess->entryPoint(runningProcess->args);
@@ -299,7 +301,6 @@ static int launch(void* args)
    Returns - the pid of the quitting child, or
         -4 if the process has no children
         -5 if the process was signaled in the join
-
 ************************************************************************ */
 int k_wait(int* code)
 {
@@ -353,7 +354,6 @@ int k_wait(int* code)
    Parameters - the code to return to the grieving parent
 
    Returns - nothing
-
 *************************************************************************/
 void k_exit(int code)
 
@@ -361,7 +361,8 @@ void k_exit(int code)
     runningProcess->exitCode = code;
     runningProcess->status = QUIT;
 
-    runningProcess->processRunTime = read_time();   //Update process run time upon quitting
+    /* Update process run time upon quitting */
+    runningProcess->processRunTime = read_time();   
 
     /* If we have a parent, notify it so k_wait() can return the status. */
     if (runningProcess->pParent != NULL)
@@ -446,25 +447,36 @@ int signaled()
 *************************************************************************/
 int read_time()
 {
-    if (runningProcess == NULL) //If running process is null return -1 for time
+    /* If running process is null return -1 for time */
+    if (runningProcess == NULL) 
     {
         return -1;
     }
     if (runningProcess != NULL)
     {
-        int currentrunTime = (read_clock() / 1000) - runTimeStart;  //Current time program has been running in ms
-        runningProcess->processRunTime = currentrunTime;    //Set process run time to current run time in ms
-        //console_output(debugFlag, "Current run time for %s is %d\n", runningProcess->name, currentrunTime); //testline
-        return runningProcess->processRunTime;   //Return run time of currently running process in ms
+        /* Current time program has been running in ms */
+        int currentrunTime = (read_clock() / 1000) - runTimeStart; 
+
+        /* Set process run time to current run time in ms */
+        runningProcess->processRunTime = currentrunTime;    
+
+        //console_output(debugFlag, "Current run time for %s is %d\n", runningProcess->name, currentrunTime);   //testline
+
+        /* Return run time of currently running process in ms */
+        return runningProcess->processRunTime;   
     }
    
 }
 
 int get_start_time()
 {
-    runTimeStart = (read_clock() / 1000); //Reads clock and divides by 1000 for time in ms
-    //console_output(debugFlag, "Starting run time for %s is %d \n", runningProcess->name, runTimeStart); //testline
-    return runTimeStart;    //Return start time in ms
+    /* Reads clock and divides by 1000 for time in ms */
+    runTimeStart = (read_clock() / 1000); 
+
+    //console_output(debugFlag, "Starting run time for %s is %d \n", runningProcess->name, runTimeStart);   //testline
+
+    /* Return start time in ms */
+    return runTimeStart;    
 }
 
 /*************************************************************************
@@ -487,9 +499,19 @@ const char* status_name(int st) {
     }
 }
 
+/**************************************************************************
+   Name - display_process_table
+
+   Purpose - Iterates through the processTable and prints the items in it
+
+   Parameters - None
+
+   Returns - nothing
+*************************************************************************/
 void display_process_table()
 {
-    console_output(debugFlag, "\nPROCESS TABLE\n"); //Title for table print
+    /* Title for table print */
+    console_output(debugFlag, "\nPROCESS TABLE\n"); 
     for (int i = 0; i < MAX_PROCESSES; i++)
     {
         if (processTable[i].pid != -1)
@@ -503,12 +525,12 @@ void display_process_table()
         }
     }
     /*
-    need to figure out how to display parent/child relationships. - Colin
+    * TO IMPLEMENT:
+    *        need to figure out how to display parent/child relationships. - Colin
     */
-
 }
 
-/**************************************************************************
+/************************************************************************
    Name - dispatcher
 
    Purpose - This is where context changes to the next process to run.
@@ -516,7 +538,6 @@ void display_process_table()
    Parameters - none
 
    Returns - nothing
-
 *************************************************************************/
 void dispatcher()
 {
@@ -525,7 +546,9 @@ void dispatcher()
     if (runningProcess != NULL)
     {
         runningProcess->status = RUNNING;
-        get_start_time(); //Calls get start time at beginning of process run
+
+        /* Calls get start time at beginning of process run */
+        get_start_time(); 
     }
         
     /* IMPORTANT: context switch enables interrupts. */
@@ -543,28 +566,27 @@ void dispatcher()
    Parameters - none
 
    Returns - nothing
-   *************************************************************************/
+ *************************************************************************/
 static void watchdog()
 {
     //DebugConsole("watchdog(): called\n"); //test line
+
     while (1)
     {
-        check_deadlock(); //system idles here
-        
-        //timer keeps program alive if processes are running
+        /* as the system idles here, the timer is to keep the program alive if processes are running */
+        check_deadlock();
     }
 }
 
-/*********************************
-    Name - check_deadlock()
+/**************************************************************************
+   Name - check_deadlock()
 
    Purpose - Checks if deadlock has occurred by traversing the processTable pids
 
    Parameters - none
 
-   Returns - 1 if watchdog is alive, 0 if something is running
-   *************************************************************************/
-
+   Returns - nothing
+ *************************************************************************/
 static void check_deadlock()
 {
     if (check_io() == 1)
@@ -572,18 +594,22 @@ static void check_deadlock()
         return;
     }
     //display_process_table();  //testline
-    for (int i = 1; i < MAX_PROCESSES; i++)     //Starts indexing after watchdog
+
+    /* Begin indexing after watchdog */
+    for (int i = 1; i < MAX_PROCESSES; i++)
     {
-        //skip empty slots and watchdog
-        if (processTable[0].status == RUNNING && processTable[i].status != RUNNING) //Check if watchdog is the only process running
+        /* Check if watchdog is the only process running */
+        if (processTable[0].status == RUNNING && processTable[i].status != RUNNING) //
         {
             console_output(debugFlag, "All processes completed.\n");
             runningProcess->processRunTime = read_time();
-            //display_process_table(); //testline
+
+            //display_process_table();      //testline
+
             stop(0);
         }
 
-        //processes are running, return = not idle
+        /* processes are running, return = not idle */
         else
         {
             return;
@@ -613,7 +639,6 @@ static inline void enableInterrupts()
 
     /* We ARE in kernel mode */
 
-
     int psr = get_psr();
 
     psr = psr | PSR_INTERRUPTS;
@@ -624,10 +649,12 @@ static inline void enableInterrupts()
 
 /**************************************************************************
    Name - DebugConsole
+
    Purpose - Prints  the message to the console_output if in debug mode
+
    Parameters - format string and va args
+
    Returns - nothing
-   Side Effects -
 *************************************************************************/
 static void DebugConsole(char* format, ...)
 {
@@ -715,6 +742,7 @@ Process* ready_dequeue(void)
     }
 	return NULL;
 }
+
 void display_ready_queues(void) {
 	console_output(debugFlag, "\nREADY QUEUES:\n");
     for (int prio = 0; prio < NUM_PRIORITIES; prio++) 
