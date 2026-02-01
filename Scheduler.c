@@ -6,13 +6,6 @@
 *************************************************************************/
 #define _CRT_SECURE_NO_WARNINGS
 
-#include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
-#include "THREADSLib.h"
-#include "Scheduler.h"
-#include "Processes.h"
-
 #define NUM_PRIORITIES 6
 #define EMPTY    0
 #define READY    1
@@ -21,33 +14,53 @@
 #define QUIT     4
 #define JOINED   5
 
-Process processTable[MAX_PROCESSES];
-Process* runningProcess = NULL;
-int nextPid = 1;
-int debugFlag = 1;
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
+#include "THREADSLib.h"
+#include "Scheduler.h"
+#include "Processes.h"
+
 static Process* readyHead = NULL;
 static Process* readyTail = NULL;
+Process* ready_queues[NUM_PRIORITIES];
+
+Process processTable[MAX_PROCESSES];
+Process* runningProcess = NULL;
+
+int nextPid = 1;
+int debugFlag = 1;
 int runTimeStart = 0;
 
-static void watchdog();
-static inline void disableInterrupts();
-static inline void enableInterrupts();
-void dispatcher();
+/* Group 6 Prototypes */
+int boostrap(void*);
+int k_spawn(char*, int (*entryPoint)(void*), void*, int, int);
 static int launch(void*);
-static void check_deadlock();
-static void DebugConsole(char* format, ...);
-
-//Group 6 Prototypes
-static int clamp_priority(int p);
-Process* ready_queues[NUM_PRIORITIES];
-void ready_queue_init(void);
-void ready_enqueue(Process* p);
-Process* ready_dequeue(void);
-void display_ready_queues(void);
-static interrupt_handler_t timer_handler();
-const char* status_name(int);
+int k_wait(int*);
+void k_exit(int);
+int k_kill(int, int); //TO IMPLEMENT
+int k_getpid(void);
+int k_join(int, int*); //TO IMPLEMENT
+int unblock(int); //TO IMPLEMENT
+int block(int); //TO IMPLEMENT
+int signaled(void); //TO IMPLEMENT
 int read_time();
 int get_start_time();
+DWORD read_clock(void);
+const char* status_name(int);
+void display_process_table(void);   //TO IMPLEMENT
+void dispatcher();
+static void watchdog();
+static void check_deadlock();
+static inline void disableInterrupts();
+static inline void enableInterrupts();
+static void DebugConsole(char*, ...);
+static int clamp_priority(int);
+static interrupt_handler_t timer_handler(); //TO IMPLEMENT
+void ready_queue_init(void);
+void ready_enqueue(Process*);
+Process* ready_dequeue(void);
+void display_ready_queues(void);
 
 /* DO NOT REMOVE */
 extern int SchedulerEntryPoint(void* pArgs);
@@ -261,7 +274,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
 }
 
 /**************************************************************************
-   Name - launch
+   Name - launch()
 
    Purpose - Utility function that makes sure the environment is ready,
              such as enabling interrupts, for the new process.
@@ -291,7 +304,7 @@ static int launch(void* args)
 }
 
 /**************************************************************************
-   Name - k_wait
+   Name - k_wait()
 
    Purpose - Wait for a child process to quit.  Return right away if
              a child has already quit.
@@ -346,7 +359,7 @@ int k_wait(int* code)
 }
 
 /**************************************************************************
-   Name - k_exit
+   Name - k_exit()
 
    Purpose - Exits a process and coordinates with the parent for cleanup
              and return of the exit code.
@@ -356,7 +369,6 @@ int k_wait(int* code)
    Returns - nothing
 *************************************************************************/
 void k_exit(int code)
-
 {
     runningProcess->exitCode = code;
     runningProcess->status = QUIT;
@@ -385,17 +397,19 @@ void k_exit(int code)
 
     /* Should not return here */
     stop(0);
-
 }
 
 /**************************************************************************
-   Name - k_kill
+   Name - k_kill()
 
    Purpose - Signals a process with the specified signal
 
-   Parameters - Signal to send
+   Parameters - pid, process ID of the target process
+                signal, the signal number to send
 
-   Returns -
+   Returns - 0 on success
+
+   TO IMPLEMENT
 *************************************************************************/
 int k_kill(int pid, int signal)
 {
@@ -404,7 +418,13 @@ int k_kill(int pid, int signal)
 }
 
 /**************************************************************************
-   Name - k_getpid
+   Name - k_getpid()
+
+   Purpose - Retrieves the process ID of the running process.
+
+   Parameters - None
+
+   Returns - The PID of the currently running process, or -1 if none.
 *************************************************************************/
 int k_getpid()
 {
@@ -412,7 +432,9 @@ int k_getpid()
 }
 
 /**************************************************************************
-   Name - k_join
+   Name - k_join()
+
+   Purpose - TO IMPLEMENT
 ***************************************************************************/
 int k_join(int pid, int* pChildExitCode)
 {
@@ -420,7 +442,9 @@ int k_join(int pid, int* pChildExitCode)
 }
 
 /**************************************************************************
-   Name - unblock
+   Name - unblock()
+
+   Purpose - TO IMPLEMENT
 *************************************************************************/
 int unblock(int pid)
 {
@@ -428,7 +452,9 @@ int unblock(int pid)
 }
 
 /*************************************************************************
-   Name - block
+   Name - block()
+
+   Purpose - TO IMPLEMENT
 *************************************************************************/
 int block(int newStatus)
 {
@@ -436,14 +462,25 @@ int block(int newStatus)
 }
 
 /*************************************************************************
-   Name - signaled
+   Name - signaled()
+
+   Purpose - TO IMPLEMENT
 *************************************************************************/
 int signaled()
 {
     return 0;
 }
+
 /*************************************************************************
-   Name - readtime
+   Name - readtime()
+
+   Purpose - Retrieves the current run time of the process that is currently
+   executing during the call. Measured in milliseconds (ms).
+
+   Parameters - None
+
+   Returns - The runtime of the current running process in milliseconds,
+   or -1 if no process is running.
 *************************************************************************/
 int read_time()
 {
@@ -465,9 +502,18 @@ int read_time()
         /* Return run time of currently running process in ms */
         return runningProcess->processRunTime;   
     }
-   
 }
 
+/*************************************************************************
+   Name - get_start_time()
+
+   Purpose - Records the start time for the current running process.
+   This value is used as a baseline for measuring runtime.
+
+   Parameters - None
+
+   Returns - The start time in milliseconds.
+*************************************************************************/
 int get_start_time()
 {
     /* Reads clock and divides by 1000 for time in ms */
@@ -480,7 +526,13 @@ int get_start_time()
 }
 
 /*************************************************************************
-   Name - readClock
+   Name - readClock()
+
+   Purpose - Retrieves the current system clock tick count.
+
+   Parameters - None
+
+   Returns - The current system clock value in ticks.
 *************************************************************************/
 DWORD read_clock()
 {
@@ -500,13 +552,15 @@ const char* status_name(int st) {
 }
 
 /**************************************************************************
-   Name - display_process_table
+   Name - display_process_table()
 
    Purpose - Iterates through the processTable and prints the items in it
 
    Parameters - None
 
-   Returns - nothing
+   Returns - Nothing
+
+   TO IMPLEMENT - need to figure out how to display parent/child relationships. - Colin
 *************************************************************************/
 void display_process_table()
 {
@@ -524,20 +578,16 @@ void display_process_table()
                 processTable[i].processRunTime);
         }
     }
-    /*
-    * TO IMPLEMENT:
-    *        need to figure out how to display parent/child relationships. - Colin
-    */
 }
 
 /************************************************************************
-   Name - dispatcher
+   Name - dispatcher()
 
    Purpose - This is where context changes to the next process to run.
 
-   Parameters - none
+   Parameters - None
 
-   Returns - nothing
+   Returns - Nothing
 *************************************************************************/
 void dispatcher()
 {
@@ -557,15 +607,15 @@ void dispatcher()
 
 
 /**************************************************************************
-   Name - watchdog
+   Name - watchdog()
 
-   Purpose - The watchdoog keeps the system going when all other
-         processes are blocked.  It can be used to detect when the system
-         is shutting down as well as when a deadlock condition arises.
+   Purpose - The watchdoog keeps the system going when all other processes 
+   are blocked.  It can be used to detect when the system is shutting down 
+   as well as when a deadlock condition arises.
 
-   Parameters - none
+   Parameters - None
 
-   Returns - nothing
+   Returns - Nothing
  *************************************************************************/
 static void watchdog()
 {
@@ -593,6 +643,7 @@ static void check_deadlock()
     {
         return;
     }
+    
     //display_process_table();  //testline
 
     /* Begin indexing after watchdog */
@@ -608,53 +659,64 @@ static void check_deadlock()
 
             stop(0);
         }
-
-        /* processes are running, return = not idle */
-        else
+        else /* processes are running */
         {
-            return;
+            stop(1);
         }
     } 
 }
 
-/*
- * Disables the interrupts.
- */
+/**************************************************************************
+   Name - disableInterrupts()
+
+   Purpose - Disables system interrupts by clearing the interrupt enable bit
+   in the process status register (PSR). This function is used while 
+   performing critical sections that must not be interrupted.
+
+   Parameters - None
+
+   Returns - Nothing
+ *************************************************************************/
 static inline void disableInterrupts()
 {
-
     /* We ARE in kernel mode */
-
-
     int psr = get_psr();
 
     psr = psr & ~PSR_INTERRUPTS;
 
     set_psr(psr);
+}
 
-} /* disableInterrupts */
+/**************************************************************************
+   Name - enableInterrupts()
 
+   Purpose - Enables system interrupts by setting the interrupt enable bit
+   in the process status register (PSR). This function should only be called
+   while the processor is in kernel mode, as it directly manipulates the PSR.
+
+   Parameters - None
+
+   Returns - Nothing
+ *************************************************************************/
 static inline void enableInterrupts()
 {
-
     /* We ARE in kernel mode */
-
     int psr = get_psr();
 
     psr = psr | PSR_INTERRUPTS;
 
     set_psr(psr);
 
-} /* enableInterrupts function - Colin */
+}
 
 /**************************************************************************
-   Name - DebugConsole
+   Name - DebugConsole()
 
-   Purpose - Prints  the message to the console_output if in debug mode
+   Purpose - Prints the message to the console_output if in debug mode
 
    Parameters - format string and va args
 
-   Returns - nothing
+   Returns - Nothing
 *************************************************************************/
 static void DebugConsole(char* format, ...)
 {
@@ -671,13 +733,16 @@ static void DebugConsole(char* format, ...)
     }
 }
 
-/* there is no I/O yet, so return false. */
-int check_io_scheduler()
-{
-    return false;
-}
+/**************************************************************************
+   Name - clamp_priority()
 
-/* If priority is out of bounds, this function will change it to 0 or 5*/
+   Purpose - Ensures that the priority value supplied by the caller is 
+   within the valid range of NUM_PRIORITIES.
+
+   Parameters - p, the priority value to the clamped
+
+   Returns - The clamped priority value, p (0 ... NUM_PRIORITIES-1)
+*************************************************************************/
 static int clamp_priority(int p)
 {
     if (p < 0)
@@ -689,17 +754,37 @@ static int clamp_priority(int p)
     return p;
 }
 
+/**************************************************************************
+   Name - timer_handler()
+
+   Purpose - Handles the timer interrupt. TO IMPLEMENT.
+
+   Parameters - None
+
+   Returns - 0
+*************************************************************************/
 static interrupt_handler_t timer_handler()
 {
     read_clock();
     return 0;
-    /* TO DO: Implement call to dispatcher if run time exceeds time slice of 80ms upon checking.
+    /* 
        if (read_time >= 80)
        {
        dispatcher();
        }
     */
 }
+
+/**************************************************************************
+   Name - ready_queue_init()
+
+   Purpose - Initializes all ready queues to empty. This function must be
+   called before any process is enqueued.
+
+   Parameters - None
+
+   Returns - None
+*************************************************************************/
 void ready_queue_init(void)
 {
     for(int i = 0; i < NUM_PRIORITIES; i++)
@@ -708,6 +793,16 @@ void ready_queue_init(void)
 	}
 }
 
+/**************************************************************************
+   Name - ready_enqueue()
+
+   Purpose - Adds a process to the end of the ready queue that corresponds
+   to the process's priroity.
+
+   Parameters - p, the pointer of the process to be enqueued
+
+   Returns - None
+*************************************************************************/
 void ready_enqueue(Process* p)
 {
     int prio = p->priority;
@@ -728,6 +823,16 @@ void ready_enqueue(Process* p)
     }
 }
 
+/**************************************************************************
+   Name - ready_dequeue()
+
+   Purpose - Removes and returns the process at the head of the highest
+   priority non-empty ready queue. If all queues are empty, returns NULL.
+
+   Parameters - None
+
+   Returns - Pointer to the dequeued process, or NULL if no ready process.
+*************************************************************************/
 Process* ready_dequeue(void)
 {
 	for (int prio = NUM_PRIORITIES - 1; prio >= 0; prio--)  //Dequeues from highest priority queue first
@@ -743,6 +848,16 @@ Process* ready_dequeue(void)
 	return NULL;
 }
 
+/**************************************************************************
+   Name - display_ready_queues()
+
+   Purpose - Prints the contents of all ready queues to the console for
+   debugging purposes.
+
+   Parameters - None
+
+   Returns - None
+*************************************************************************/
 void display_ready_queues(void) {
 	console_output(debugFlag, "\nREADY QUEUES:\n");
     for (int prio = 0; prio < NUM_PRIORITIES; prio++) 
@@ -764,4 +879,20 @@ void display_ready_queues(void) {
 
         console_output(debugFlag,"NULL\n");
     }
+}
+
+/**************************************************************************
+   Name - check_io_scheduler()
+
+   Purpose - Checks IO. Since it is not implemented it returns false.
+
+   Parameters - None
+
+   Returns - False
+
+   TO IMPLEMENT
+*************************************************************************/
+int check_io_scheduler()
+{
+    return false;
 }
