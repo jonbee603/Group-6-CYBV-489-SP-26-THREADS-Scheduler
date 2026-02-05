@@ -1,9 +1,22 @@
-/**************************************************************************
-        Scheduler.c Implementation for Phase 1 of the THREADS Project
+/*********************************************************************************
+        Scheduler.c Final Implementation for the THREADS-Scheduler Project
 
                     CYBV 489 - SP 26: Professor Li Xu
            Group 6: Lexi Lamaide, Colin Martin, Jonathan Bergeron
-*************************************************************************/
+**********************************************************************************/
+
+/*
+Special Notes to pay attention to:
+
+Don't forget to re-enable interrupts
+Incorrect READY/RUNNING transitioning
+Lost tracking on blocked processes
+Improper parent-child cleanup
+
+WEIRD HARD TO DEBUG BEHAVIORS:
+Experiencing deadlock? - block/unblocking issue
+TIME SLICE bugs - priority issue? fairness issues
+*/
 #define _CRT_SECURE_NO_WARNINGS
 
 #define NUM_PRIORITIES 6
@@ -28,9 +41,11 @@ Process* ready_queues[NUM_PRIORITIES];
 Process processTable[MAX_PROCESSES];
 Process* runningProcess = NULL;
 
+interrupt_handler_t* intVector; //TO IMPLEMENT
+
 int nextPid = 1;
 int debugFlag = 1;
-int runTimeStart = 0;
+int runTimeStart = 0; //used in read_time()
 
 /* Group 6 Prototypes */
 int bootstrap(void*);
@@ -47,6 +62,7 @@ int signaled(void); //TO IMPLEMENT
 int read_time();
 int get_start_time();
 DWORD read_clock(void);
+void time_slice(); //TO IMPLEMENT
 const char* status_name(int);
 void display_process_table(void);   //TO IMPLEMENT
 void dispatcher();
@@ -56,7 +72,8 @@ static inline void disableInterrupts();
 static inline void enableInterrupts();
 static void DebugConsole(char*, ...);
 static int clamp_priority(int);
-static interrupt_handler_t timer_handler(); //TO IMPLEMENT
+static void clock_handler(char*, uint8_t, uint32_t); //TO IMPLEMENT
+//static interrupt_handler_t timer_handler(); //@colin, delete or keep?
 void ready_queue_init(void);
 void ready_enqueue(Process*);
 Process* ready_dequeue(void);
@@ -312,8 +329,8 @@ static int launch(void* args)
    Parameters - Output parameter for the child's exit code.
 
    Returns - the pid of the quitting child, or
-        -4 if the process has no children
-        -5 if the process was signaled in the join
+             -4 if the process has no children
+             -5 if the process was signaled in the join
 ************************************************************************ */
 int k_wait(int* code)
 {
@@ -402,7 +419,9 @@ void k_exit(int code)
 /**************************************************************************
    Name - k_kill()
 
-   Purpose - Signals a process with the specified signal
+   Purpose - Sends SIG_TERM to a process
+             Marks process as signaled (does not terminate immediately)
+             Invalid pid or signal halts kernel
 
    Parameters - pid, process ID of the target process
                 signal, the signal number to send
@@ -434,27 +453,65 @@ int k_getpid()
 /**************************************************************************
    Name - k_join()
 
-   Purpose - TO IMPLEMENT
+   Purpose - Waits for a specific process to terminate
+             Illegal joins halt the kernel 
+
+   Parameters - pid, process ID of the target process
+                *pChildExitCode - the pointer to the process child's exit code
+   
+   TO IMPLEMENT & NOTES: (from lecture) Processes cannot join with themselves
+   and cannot join with their parent's process. If the process is attempting
+   to join itself or attempting to join a non-existing process, the kernel
+   should be halted with stop(1); 
+   
+   OR if the process attempts to join its parent, the kernel should be halted
+   with an error code of 2.
+
+   I also noticed in lecture her function prototype arguments were pid, &exit_code
+   which may differ from *pChildExitCode?
 ***************************************************************************/
 int k_join(int pid, int* pChildExitCode)
 {
+    //stop(1); //halts the kernel with error 0x1
+
+    //stop(2); //halts the kernel with error 0x2
     return 0;
 }
 
 /**************************************************************************
    Name - unblock()
 
-   Purpose - TO IMPLEMENT
+   Purpose - Unblocks the calling process
+
+   Parameters - pid, the process ID
+
+   Retruns - ????
+   
+   TO IMPLEMENT & NOTES: The inverse of block(), moves a blocked process
+   back to a READY state.
+   Fails if pid is invalid or not blocked
+   Does not immediately dispatch the process
 *************************************************************************/
 int unblock(int pid)
 {
+    //if (pid == valid process)
     return 0;
 }
 
 /*************************************************************************
    Name - block()
 
-   Purpose - TO IMPLEMENT
+   Purpose - Blocks the calling process
+
+   Parameters - newStatus for the block status
+
+   Returns - -5 if signaled while blocked
+   
+   TO IMPLEMENT & NOTES: 0 on success, -5 if signaled while blocked??
+   newStatus must be >10, in lecture she uses block_status instead of newStatus
+   *Consider swapping newStatus with block_status if it makes more sense
+
+   Are we just making the process NOT_READY?
 *************************************************************************/
 int block(int newStatus)
 {
@@ -464,7 +521,15 @@ int block(int newStatus)
 /*************************************************************************
    Name - signaled()
 
-   Purpose - TO IMPLEMENT
+   Purpose - Checks whether the current process has been signaled
+
+   Parameters - None
+
+   Returns - 1 if signaled, 0 if otherwise
+
+   Side Effects/Use Cases - Used by k_wait(), k_join(), and block()
+
+   TO IMPLEMENT
 *************************************************************************/
 int signaled()
 {
@@ -513,6 +578,8 @@ int read_time()
    Parameters - None
 
    Returns - The start time in milliseconds.
+
+   NOTES: In lecture, she said microseconds? Probably better to use our implementation of milli
 *************************************************************************/
 int get_start_time()
 {
@@ -526,7 +593,7 @@ int get_start_time()
 }
 
 /*************************************************************************
-   Name - readClock()
+   Name - read_clock()
 
    Purpose - Retrieves the current system clock tick count.
 
@@ -551,16 +618,47 @@ const char* status_name(int st) {
     }
 }
 
-/**************************************************************************
-   Name - display_process_table()
+/*************************************************************************
+   Name - time_slice()
 
-   Purpose - Iterates through the processTable and prints the items in it
+   Purpose - The time_slice function determines if the currently active
+   process has exceeded its current time slice. If the quantum value has
+   been exceeded the dispatcher is called.
 
    Parameters - None
 
-   Returns - Nothing
+   Returns - None
 
-   TO IMPLEMENT - need to figure out how to display parent/child relationships. - Colin
+   TO IMPLEMENT & NOTES: Called by the timer interrupt handler
+   Checks quantum expiration (80ms), which is milliseconds
+   Calls dispatcher if time slice expired
+   Not sure if we should replace read_clock with this function.
+*************************************************************************/
+void time_slice()
+{
+    //int timeQuantum .080; (in seconds, or we can just use 80)
+    //if timer > quantum { dispatcher(); } //at some point in this function call dispatcher();
+}
+
+/**************************************************************************
+   Name - display_process_table()
+
+   Purpose - Iterates through the processTable and prints the following:
+                pid, the process ID
+                parent, NEED TO IMPLEMENT
+                priority, the process priority level
+                status, the process status
+                and processRunTime, the CPU time
+
+                Primarily used for debugging.
+
+   Parameters - None
+
+   Returns - None
+
+   TO IMPLEMENT & NOTES:
+   need to figure out how to display parent/child relationships. - Colin
+   May need to adjust console output to align with expected solution.output.txt, which may involve removing name and adding parent? - Jon
 *************************************************************************/
 void display_process_table()
 {
@@ -584,10 +682,20 @@ void display_process_table()
    Name - dispatcher()
 
    Purpose - This is where context changes to the next process to run.
-
+             
    Parameters - None
 
    Returns - Nothing
+
+   TO IMPLEMENT & NOTES: 
+             1. Decides which process goes to run next and then executes that process.
+             2. Checks if the current process can continue running:
+                (a) Has it been blocked or quitting?
+                (b) Is it still the highest priority amnong READY processes?
+                (c) Has it been time-sliced?
+            3. Selects a new process and perform a context switch in order to get ir running.
+            4. Follow Scheduling policy
+
 *************************************************************************/
 void dispatcher()
 {
@@ -635,7 +743,7 @@ static void watchdog()
 
    Parameters - none
 
-   Returns - nothing
+   Returns - Nothing
  *************************************************************************/
 static void check_deadlock()
 {
@@ -755,6 +863,23 @@ static int clamp_priority(int p)
 }
 
 /**************************************************************************
+   Name - clock_handler()
+
+   Purpose - Handles the timer interrupt.
+
+   Parameters - char *deviceName, uint8_t command, uint32_t status
+
+   Returns - 0
+
+   TO IMPLEMENT & NOTES: Renamed and prototype aligned with lecture
+   Used to be timer_handler()
+*************************************************************************/
+static void clock_handler(char* deviceName, uint8_t command, uint32_t status)
+{
+    time_slice();
+}
+
+/**************************************************************************
    Name - timer_handler()
 
    Purpose - Handles the timer interrupt. TO IMPLEMENT.
@@ -762,18 +887,19 @@ static int clamp_priority(int p)
    Parameters - None
 
    Returns - 0
-*************************************************************************/
-static interrupt_handler_t timer_handler()
-{
-    read_clock();
-    return 0;
-    /* 
-       if (read_time >= 80)
-       {
-       dispatcher();
-       }
-    */
-}
+   NOTES: @Colin, do we need this?
+***************************************************************************/
+//static interrupt_handler_t timer_handler()
+//{
+//    read_clock();
+//    return 0;
+//    /*
+//       if (read_time >= 80)
+//       {
+//       dispatcher();
+//       }
+//    */
+//}
 
 /**************************************************************************
    Name - ready_queue_init()
@@ -783,7 +909,7 @@ static interrupt_handler_t timer_handler()
 
    Parameters - None
 
-   Returns - None
+   Returns - Nothing
 *************************************************************************/
 void ready_queue_init(void)
 {
@@ -801,7 +927,7 @@ void ready_queue_init(void)
 
    Parameters - p, the pointer of the process to be enqueued
 
-   Returns - None
+   Returns - Nothing
 *************************************************************************/
 void ready_enqueue(Process* p)
 {
@@ -856,7 +982,7 @@ Process* ready_dequeue(void)
 
    Parameters - None
 
-   Returns - None
+   Returns - Nothing
 *************************************************************************/
 void display_ready_queues(void) {
 	console_output(debugFlag, "\nREADY QUEUES:\n");
