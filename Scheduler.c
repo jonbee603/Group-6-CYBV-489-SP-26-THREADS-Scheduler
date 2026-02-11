@@ -63,7 +63,7 @@ int signaled(void); //TO IMPLEMENT
 int read_time();
 int get_start_time();
 DWORD read_clock(void);
-void time_slice(); //TO IMPLEMENT
+void time_slice(); 
 const char* status_name(int);
 void display_process_table(void);   //TO IMPLEMENT
 void dispatcher();
@@ -221,7 +221,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     if (priority < 0 || priority > HIGHEST_PRIORITY)
     {
         console_output(debugFlag, "k_spawn(): invalid priority %d. Calling priority clamp\n", priority);
-		clamp_priority(priority);           
+		priority = clamp_priority(priority);           
     }
 
     /* Find an empty slot in the process table */
@@ -236,7 +236,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     if (proc_slot < 0)
     {
         console_output(debugFlag, "k_spawn(): No empty slot in process table.\n");
-        return -1;
+        return -4;
     }
 
     pNewProc = &processTable[proc_slot];
@@ -271,7 +271,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     }
 
     /* Initialize context for this process */
-    pNewProc->context = context_initialize(launch, stacksize, arg);
+    pNewProc->context = context_initialize(launch, stacksize, pNewProc);
     if (pNewProc->context == NULL)
     {
         console_output(debugFlag, "k_spawn(): context_initialize failed.\n");
@@ -347,9 +347,7 @@ int k_wait(int* code)
 
         int kidpid = runningProcess->zombiePid;
         runningProcess->zombiePid = -1;
-
-        /* We spawn one child, so we can clear the list here */
-        runningProcess->pChildren = NULL;
+        runningProcess->zombieExitCode = 0;
 
         return kidpid;
     }
@@ -367,7 +365,7 @@ int k_wait(int* code)
 
         int kidpid = runningProcess->zombiePid;
         runningProcess->zombiePid = -1;
-        runningProcess->pChildren = NULL;
+        runningProcess->zombieExitCode = 0;
 
         return kidpid;
     }
@@ -406,6 +404,18 @@ void k_exit(int code)
             parent->waiting = 0;
             parent->status = READY;
             ready_enqueue(parent);
+        }
+    }
+
+    /* Clears the process table entry for reuse */
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (processTable[i].pid == runningProcess->pid)
+        {
+            processTable[i].pid = -1;
+            processTable[i].status = EMPTY;
+            processTable[i].context = NULL;
+            break;
         }
     }
 
@@ -472,9 +482,38 @@ int k_getpid()
 ***************************************************************************/
 int k_join(int pid, int* pChildExitCode)
 {
-    //stop(1); //halts the kernel with error 0x1
+    /* Check if trying to join self or not*/
+    if (pid == runningProcess->pid)
+    {
+        /* halts the kernel with error 0x1 */
+        stop(1); 
+    }
 
-    //stop(2); //halts the kernel with error 0x2
+    /* find process in the process table */
+    Process* targetProcess = NULL;
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (processTable[i].pid == pid)
+        {
+            targetProcess = &processTable[i];
+            break;
+        }
+    }
+    
+    /* Checks if trying to join nothing */
+    if (targetProcess == NULL)
+    {
+        /* halts the kernel with error 0x1 */
+        stop(1);
+    }
+
+    /* Checks if trying to join parent, illegal move. */
+    if (targetProcess->pParent == runningProcess)
+    {
+        /* halts the kernel with error 0x2 */
+        stop(2); 
+    }
+
     return 0;
 }
 
@@ -613,12 +652,12 @@ DWORD read_clock()
 
 const char* status_name(int st) {
     switch (st) {
-	case EMPTY:   return "EMPTY";
+    case EMPTY:   return "EMPTY";
     case READY:   return "READY";
-	case RUNNING: return "RUNNING";
+    case RUNNING: return "RUNNING";
     case BLOCKED: return "BLOCKED";
-	case QUIT:    return "QUIT";
-	case JOINED:   return "JOINED";
+    case QUIT:    return "QUIT";
+    case JOINED:   return "JOINED";
     default:      return "UNKNOWN";
     }
 }
@@ -637,11 +676,11 @@ const char* status_name(int st) {
 void time_slice()
 {
     /*Is there a process?*/
-    if (runningProcess != NULL) 
+    if (runningProcess != NULL)
     {
         int currentTime = read_time();
         /*80 ms, has time slice expired?*/
-        if (currentTime >= 80) 
+        if (currentTime >= 80)
         {
             /*timer expired, time to dispatch*/
             dispatcher();
@@ -664,27 +703,34 @@ void time_slice()
    Parameters - None
 
    Returns - None
-
-   TO IMPLEMENT & NOTES:
-   need to figure out how to display parent/child relationships. - Colin
-   May need to adjust console output to align with expected solution.output.txt, which may involve removing name and adding parent? - Jon
 *************************************************************************/
 void display_process_table()
 {
     /* Title for table print */
-    console_output(debugFlag, "\nPROCESS TABLE\n"); 
-    for (int i = 0; i < MAX_PROCESSES; i++)
-    {
-        if (processTable[i].pid != -1)
+    console_output(debugFlag, "\nPID     Parent   Priority  Status        # Kids   CPUtime  Name    \n");
+        for (int i = 0; i < MAX_PROCESSES; i++)
         {
-            console_output(debugFlag, "pid=%d, priority=%d, status=%s, name=%s, run time=%d\n",
-                processTable[i].pid,
-                processTable[i].priority,
-                status_name(processTable[i].status),
-                processTable[i].name,
-                processTable[i].processRunTime);
+            /* Handles parent PID */
+            int parentPID = -1;
+            if (processTable[i].pid != -1)
+            {
+                if (processTable[i].pParent != NULL)
+                {
+                    parentPID = processTable[i].pParent->pid;
+                }
+            }
+
+            /* Handles child PID */
+            int numChildren = 0;
+            Process* child = processTable[i].pChildren;
+            while (child != NULL)
+            {
+                numChildren++;
+                child = child->nextSiblingProcess;
+            }
+
+            console_output(debugFlag, "%-5d   %-6d   %-8d   %-13s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, processTable[i].processRunTime, processTable[i].name);
         }
-    }
 }
 
 /************************************************************************
@@ -708,18 +754,35 @@ void display_process_table()
 *************************************************************************/
 void dispatcher()
 {
-	runningProcess = ready_dequeue();
+    /* Make a placeholder for runningProcess */
+    Process* oldProcess = runningProcess;
 
-    if (runningProcess != NULL)
+    /* If there was a previously running process, save its state */
+    if (oldProcess != NULL && oldProcess->status == RUNNING)
     {
+        oldProcess->status = READY;
+        ready_enqueue(oldProcess);
+    }
+
+    /* Get next process to run*/
+    Process* nextProcess = ready_dequeue();
+
+    if (nextProcess != NULL)
+    {
+        runningProcess = nextProcess;
         runningProcess->status = RUNNING;
 
-        /* Calls get start time at beginning of process run */
+        /* Reset start time for this process */
         get_start_time(); 
+
+        /* IMPORTANT: context switch enables interrupts. */
+        context_switch(runningProcess->context);
     }
-        
-    /* IMPORTANT: context switch enables interrupts. */
-    context_switch(runningProcess->context);
+    else
+    {
+        /* If we get here, no process is ready and we need the watchdog*/
+        return;
+    }
 }
 
 
