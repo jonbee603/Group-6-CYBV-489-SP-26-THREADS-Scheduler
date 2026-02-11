@@ -17,6 +17,7 @@ WEIRD HARD TO DEBUG BEHAVIORS:
 Experiencing deadlock? - block/unblocking issue
 TIME SLICE bugs - priority issue? fairness issues
 */
+
 #define _CRT_SECURE_NO_WARNINGS
 
 #define NUM_PRIORITIES 6
@@ -73,7 +74,6 @@ static inline void enableInterrupts();
 static void DebugConsole(char*, ...);
 static int clamp_priority(int);
 static void clock_handler(char*, uint8_t, uint32_t); //TO IMPLEMENT
-//static interrupt_handler_t timer_handler(); //@colin, delete or keep?
 void ready_queue_init(void);
 void ready_enqueue(Process*);
 Process* ready_dequeue(void);
@@ -139,7 +139,7 @@ int bootstrap(void* pArgs)
     /* Initialize the clock interrupt handler */
     interrupt_handler_t* handlers;              //Handlers protoype
     handlers = get_interrupt_handlers();        //Call get_interrupt_handlers function
-    handlers[THREADS_TIMER_INTERRUPT] = timer_handler(); //Set handlers timer interrupt index to call timer handler function     
+    handlers[THREADS_TIMER_INTERRUPT] = clock_handler; //Set handlers timer interrupt index to timer handler function     
 
     /* startup a watchdog process */
     result = k_spawn("watchdog", watchdog, NULL, THREADS_MIN_STACK_SIZE, LOWEST_PRIORITY);
@@ -296,7 +296,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
    Purpose - Utility function that makes sure the environment is ready,
              such as enabling interrupts, for the new process.
 
-   Parameters - none
+   Parameters - Pointer to the process to launch
 
    Returns - nothing
 *************************************************************************/
@@ -312,7 +312,7 @@ static int launch(void* args)
     /* Call the function passed to spawn and capture its return value */
     int rc = runningProcess->entryPoint(runningProcess->args);
 
-    DebugConsole("Process %d returned to launch\n", runningProcess->pid);
+    //DebugConsole("Process %d returned to launch\n", runningProcess->pid); //test line
 
     /* Stop the process gracefully */
     k_exit(rc);
@@ -577,19 +577,24 @@ int read_time()
 
    Parameters - None
 
-   Returns - The start time in milliseconds.
+   Returns - The start time in milliseconds or -1 if no process is running.
 
    NOTES: In lecture, she said microseconds? Probably better to use our implementation of milli
 *************************************************************************/
 int get_start_time()
 {
-    /* Reads clock and divides by 1000 for time in ms */
-    runTimeStart = (read_clock() / 1000); 
+    /* Is a process running? */
+    if (runningProcess != NULL)
+    {
+        /* Reads clock and divides by 1000 for time in ms */
+        runTimeStart = (read_clock() / 1000);
 
-    //console_output(debugFlag, "Starting run time for %s is %d \n", runningProcess->name, runTimeStart);   //testline
+        //console_output(debugFlag, "Starting run time for %s is %d \n", runningProcess->name, runTimeStart);   //testline
 
-    /* Return start time in ms */
-    return runTimeStart;    
+        /* Return start time in ms */
+        return runTimeStart;
+    }
+    return -1;
 }
 
 /*************************************************************************
@@ -628,16 +633,20 @@ const char* status_name(int st) {
    Parameters - None
 
    Returns - None
-
-   TO IMPLEMENT & NOTES: Called by the timer interrupt handler
-   Checks quantum expiration (80ms), which is milliseconds
-   Calls dispatcher if time slice expired
-   Not sure if we should replace read_clock with this function.
 *************************************************************************/
 void time_slice()
 {
-    //int timeQuantum .080; (in seconds, or we can just use 80)
-    //if timer > quantum { dispatcher(); } //at some point in this function call dispatcher();
+    /*Is there a process?*/
+    if (runningProcess != NULL) 
+    {
+        int currentTime = read_time();
+        /*80 ms, has time slice expired?*/
+        if (currentTime >= 80) 
+        {
+            /*timer expired, time to dispatch*/
+            dispatcher();
+        }
+    }
 }
 
 /**************************************************************************
@@ -878,28 +887,6 @@ static void clock_handler(char* deviceName, uint8_t command, uint32_t status)
 {
     time_slice();
 }
-
-/**************************************************************************
-   Name - timer_handler()
-
-   Purpose - Handles the timer interrupt. TO IMPLEMENT.
-
-   Parameters - None
-
-   Returns - 0
-   NOTES: @Colin, do we need this?
-***************************************************************************/
-//static interrupt_handler_t timer_handler()
-//{
-//    read_clock();
-//    return 0;
-//    /*
-//       if (read_time >= 80)
-//       {
-//       dispatcher();
-//       }
-//    */
-//}
 
 /**************************************************************************
    Name - ready_queue_init()
