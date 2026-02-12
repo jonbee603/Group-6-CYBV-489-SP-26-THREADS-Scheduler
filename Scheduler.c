@@ -57,15 +57,15 @@ int k_kill(int, int);
 void k_exit(int);
 int k_getpid(void);
 void time_slice();
-int unblock(int); 
-int block(int); 
+void dispatcher();
 int signaled(void); //TO IMPLEMENT
-int cpu_time();
+int block(int);
+int unblock(int); 
 int get_start_time();
+int cpu_time();
 DWORD read_clock(void);
 const char* status_name(int);
 void display_process_table(void);   //TO IMPLEMENT
-void dispatcher();
 static void watchdog();
 static void check_deadlock();
 static inline void disableInterrupts();
@@ -580,6 +580,8 @@ int k_getpid()
    Parameters - None
 
    Returns - None
+
+   Notes - The quantum is 80 ms.
 *************************************************************************/
 void time_slice()
 {
@@ -596,12 +598,121 @@ void time_slice()
     }
 }
 
+/************************************************************************
+   Name - dispatcher()
+
+   Purpose - The dispatcher function is the workhorse of the Scheduler. This is where the
+             kernel decides which process to run next and changes context to the next
+             process to run if context needs to change from the currently running process.
+
+   Parameters - None
+
+   Returns - Nothing
+
+   TO IMPLEMENT & NOTES:
+             1. Decides which process goes to run next and then executes that process.
+             2. Checks if the current process can continue running:
+                (a) Has it been blocked or quitting?
+                (b) Is it still the highest priority amnong READY processes?
+                (c) Has it been time-sliced?
+            3. Selects a new process and perform a context switch in order to get ir running.
+            4. Follow Scheduling policy
+
+*************************************************************************/
+void dispatcher()
+{
+    /* Make a placeholder for runningProcess */
+    Process* oldProcess = runningProcess;
+
+    /* If there was a previously running process, save its state */
+    if (oldProcess != NULL && oldProcess->status == RUNNING)
+    {
+        oldProcess->status = READY;
+        ready_enqueue(oldProcess);
+    }
+
+    /* Get next process to run*/
+    Process* nextProcess = ready_dequeue();
+
+    if (nextProcess != NULL)
+    {
+        runningProcess = nextProcess;
+        runningProcess->status = RUNNING;
+
+        /* Reset start time for this process */
+        get_start_time();
+
+        /* IMPORTANT: context switch enables interrupts. */
+        context_switch(runningProcess->context);
+    }
+    else
+    {
+        /* If we get here, no process is ready and we need the watchdog*/
+        return;
+    }
+}
+
+/*************************************************************************
+   Name - signaled()
+
+   Purpose - Checks whether the current process has been signaled
+
+   Parameters - None
+
+   Returns - 1 if signaled, 0 if otherwise
+
+   Side Effects/Use Cases - Used by k_wait(), k_join(), and block()
+
+   TO IMPLEMENT
+*************************************************************************/
+int signaled()
+{
+    return 0;
+}
+
+/*************************************************************************
+   Name - block()
+
+   Purpose - This function blocks the calling process and sets the processes status in the process
+                table to the value specified in block_status. The value of block_status must be
+                greater than 10. The values of 0-10 are reserved for internal kernel process states.
+
+   Parameters - block_status for the block status to be assigned to the blocked process
+
+   Returns - -5 if signaled while blocked
+             0 on successful new process creation
+
+   Notes - If this function is called with a value equal to or less than 10, the kernel should be halted with a code of 1:
+            Use integer values 0-10 to keep track of the state of processes in the process table.
+
+*************************************************************************/
+int block(int block_status)
+{
+    /* Validate arguments */
+    if (block_status <= 10)
+    {
+        stop(1);
+    }
+
+    /* Assign block_status to blocked */
+    runningProcess->status = block_status;
+
+    /* Was the process signaled? */
+    if (signaled())
+    {
+        return -5;
+    }
+
+    /* 0 on success, new process created */
+    return 0;
+}
+
 /**************************************************************************
    Name - unblock()
 
-   Purpose - Unblocks the calling process
+   Purpose - The unblock function returns a blocked process to the ready to run state.
 
-   Parameters - pid, the process ID
+   Parameters - pid, the process ID of the process to unblock.
 
    Retruns - The function returns 0 upon success. Otherwise, an error
              code is returned.
@@ -644,58 +755,32 @@ int unblock(int pid)
 }
 
 /*************************************************************************
-   Name - block()
+   Name - get_start_time()
 
-   Purpose - This function blocks the calling process and sets the processes status in the process
-                table to the value specified in block_status. The value of block_status must be
-                greater than 10. The values of 0-10 are reserved for internal kernel process states.
-
-   Parameters - block_status for the block status to be assigned to the blocked process
-
-   Returns - -5 if signaled while blocked
-             0 on successful new process creation
-
-   Notes - If this function is called with a value equal to or less than 10, the kernel should be halted with a code of 1:
-            Use integer values 0-10 to keep track of the state of processes in the process table.
-
-*************************************************************************/
-int block(int block_status)
-{
-    /* Validate arguments */
-    if (block_status <= 10)
-    {
-        stop(1);
-    }
-
-    /* Assign block_status to blocked */
-    runningProcess->status = block_status;
-
-    /* Was the process signaled? */
-    if (signaled())
-    {
-        return -5;
-    }
-
-    /* 0 on success, new process created */
-    return 0;
-}
-
-/*************************************************************************
-   Name - signaled()
-
-   Purpose - Checks whether the current process has been signaled
+   Purpose - This function returns the start time of the process in microseconds.
 
    Parameters - None
 
-   Returns - 1 if signaled, 0 if otherwise
+   Returns - The function returns the calling process’s start time.
 
-   Side Effects/Use Cases - Used by k_wait(), k_join(), and block()
-
-   TO IMPLEMENT
+   Notes - Halts the kernel if illegally called
 *************************************************************************/
-int signaled()
+int get_start_time()
 {
-    return 0;
+    /* Is a process running? */
+    if (runningProcess != NULL)
+    {
+        /* Reads clock and divides by 1000 for time in ms */
+        runTimeStart = (read_clock() / 1000);
+
+        //console_output(debugFlag, "Starting run time for %s is %d \n", runningProcess->name, runTimeStart);   //testline
+
+        /* Return start time in ms */
+        return runTimeStart;
+    }
+    else
+    /* Halts the kernel, no running process, this is illegal */
+        stop(1);
 }
 
 /*************************************************************************
@@ -706,7 +791,7 @@ int signaled()
 
    Parameters - None
 
-   Returns - The runtime of the current running process in milliseconds.
+   Returns - The function returns the calling process’s cpu time
 
    Notes - Halts the kernel with illegal activity
 *************************************************************************/
@@ -734,41 +819,13 @@ int cpu_time()
 }
 
 /*************************************************************************
-   Name - get_start_time()
-
-   Purpose - Records the start time for the current running process.
-   This value is used as a baseline for measuring runtime.
-
-   Parameters - None
-
-   Returns - The start time in milliseconds or -1 if no process is running.
-
-   NOTES: In lecture, she said microseconds? Probably better to use our implementation of milli
-*************************************************************************/
-int get_start_time()
-{
-    /* Is a process running? */
-    if (runningProcess != NULL)
-    {
-        /* Reads clock and divides by 1000 for time in ms */
-        runTimeStart = (read_clock() / 1000);
-
-        //console_output(debugFlag, "Starting run time for %s is %d \n", runningProcess->name, runTimeStart);   //testline
-
-        /* Return start time in ms */
-        return runTimeStart;
-    }
-    return -1;
-}
-
-/*************************************************************************
    Name - read_clock()
 
-   Purpose - Retrieves the current system clock tick count.
+   Purpose - This function returns the current value of the system clock using the THREADS system_clock function.
 
    Parameters - None
 
-   Returns - The current system clock value in ticks.
+   Returns - The function returns the value of system_clock.
 *************************************************************************/
 DWORD read_clock()
 {
@@ -790,14 +847,9 @@ const char* status_name(int st) {
 /**************************************************************************
    Name - display_process_table()
 
-   Purpose - Iterates through the processTable and prints the following:
-                pid, the process ID
-                parent, NEED TO IMPLEMENT
-                priority, the process priority level
-                status, the process status
-                and processRunTime, the CPU time
-
-                Primarily used for debugging.
+   Purpose - This function displays all non-empty processes in the process table. The displayed
+            information includes the process Id (PID), parent PID, Priority, status, number of
+            children, cpu time, and process name.
 
    Parameters - None
 
@@ -831,59 +883,6 @@ void display_process_table()
             console_output(debugFlag, "%-5d   %-6d   %-8d   %-13s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, processTable[i].processRunTime, processTable[i].name);
         }
 }
-
-/************************************************************************
-   Name - dispatcher()
-
-   Purpose - This is where context changes to the next process to run.
-             
-   Parameters - None
-
-   Returns - Nothing
-
-   TO IMPLEMENT & NOTES: 
-             1. Decides which process goes to run next and then executes that process.
-             2. Checks if the current process can continue running:
-                (a) Has it been blocked or quitting?
-                (b) Is it still the highest priority amnong READY processes?
-                (c) Has it been time-sliced?
-            3. Selects a new process and perform a context switch in order to get ir running.
-            4. Follow Scheduling policy
-
-*************************************************************************/
-void dispatcher()
-{
-    /* Make a placeholder for runningProcess */
-    Process* oldProcess = runningProcess;
-
-    /* If there was a previously running process, save its state */
-    if (oldProcess != NULL && oldProcess->status == RUNNING)
-    {
-        oldProcess->status = READY;
-        ready_enqueue(oldProcess);
-    }
-
-    /* Get next process to run*/
-    Process* nextProcess = ready_dequeue();
-
-    if (nextProcess != NULL)
-    {
-        runningProcess = nextProcess;
-        runningProcess->status = RUNNING;
-
-        /* Reset start time for this process */
-        get_start_time(); 
-
-        /* IMPORTANT: context switch enables interrupts. */
-        context_switch(runningProcess->context);
-    }
-    else
-    {
-        /* If we get here, no process is ready and we need the watchdog*/
-        return;
-    }
-}
-
 
 /**************************************************************************
    Name - watchdog()
