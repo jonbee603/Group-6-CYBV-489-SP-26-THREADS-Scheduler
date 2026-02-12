@@ -46,24 +46,23 @@ interrupt_handler_t* intVector; //TO IMPLEMENT
 
 int nextPid = 1;
 int debugFlag = 1;
-int runTimeStart = 0; //used in read_time()
+int runTimeStart = 0; //used in cpu_time()
 
 /* Group 6 Prototypes */
 int bootstrap(void*);
 int k_spawn(char*, int (*entryPoint)(void*), void*, int, int);
-static int launch(void*);
 int k_wait(int*);
+int k_join(int, int*);
+int k_kill(int, int);
 void k_exit(int);
-int k_kill(int, int); //TO IMPLEMENT
 int k_getpid(void);
-int k_join(int, int*); //TO IMPLEMENT
-int unblock(int); //TO IMPLEMENT
-int block(int); //TO IMPLEMENT
+void time_slice();
+int unblock(int); 
+int block(int); 
 int signaled(void); //TO IMPLEMENT
-int read_time();
+int cpu_time();
 int get_start_time();
 DWORD read_clock(void);
-void time_slice(); 
 const char* status_name(int);
 void display_process_table(void);   //TO IMPLEMENT
 void dispatcher();
@@ -78,6 +77,7 @@ void ready_queue_init(void);
 void ready_enqueue(Process*);
 Process* ready_dequeue(void);
 void display_ready_queues(void);
+static int launch(void*);
 
 /* DO NOT REMOVE */
 extern int SchedulerEntryPoint(void* pArgs);
@@ -170,19 +170,40 @@ int bootstrap(void* pArgs)
 /*************************************************************************
    k_spawn()
 
-   Purpose - spawns a new process.
+   Purpose - The k_spawn function creates a new process in the kernel at the specified priority.
+             The process begins at the function pointed to by entry_point, which is called with a
+             single parameter with the value in arg. The THREADS library manages the stack
+             for each context, but the caller needs to provide the stack size in stack_size when
+             creating the context.
 
-             Finds an empty entry in the process table and initializes
-             information of the process.  Updates information in the
-             parent process to reflect this child process creation.
+   Parameters - name, name of the new process
+                entry_point, a function pointer that serves as the entry point of the new process
+                arg, This must point to a string that is passed to the new process
+                     as a parameter to the entry_point function
+                stack_size, The size of the stack used for the process.
+                priority, The new processes' priority (0-5)
 
-   Parameters - the process's entry point function, the stack size, and
-                the process's priority.
+   Returns - Upon success, the function returns the process id (pid) of the
+             newly created process. The function should an error code in an
+             error occurs:
+             Return Values
+                <pid> Process ID of the new process.
+                -1 A parameter is missing or invalid.
+                -2 The specified stack size is out of
+                range.
+                -3 The specified priority is out of range.
+                -4 The process cannot be created
+                because the process table is full.
 
-   Returns - The Process ID (pid) of the new child process
-             The function must return if the process cannot be created.
+   Notes - The strings pointed to by the name and arg parameters cannot be larger than THREADS_MAX_NAME
+           in size. If either of these strings are larger than THREADS_MAX_NAME, the kernel must be halted with
+           a call to stop and an error code of 1:
+           This is the function where the context of the new process is initialized with context_initialize.
+           Save the new context in the process table to use when it’s time to start the process or return
+           processing to the process via the context_switch function.
+           Important: Interrupts must be enabled when a process is started.
 *************************************************************************/
-int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int priority)
+int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, int priority)
 {
     int proc_slot = -1;
     Process* pNewProc = NULL;
@@ -203,25 +224,27 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
         console_output(debugFlag, "k_spawn(): Process name is too long.  Halting...\n");
         stop(1);
     }
-    if (entryPoint == NULL)
+    if (entry_point == NULL)
     {
-        console_output(debugFlag, "k_spawn(): entryPoint is NULL.\n");
+        console_output(debugFlag, "k_spawn(): entry_point is NULL.\n");
         return -1;
     }
-    if (entryPoint == NULL)
+    if (entry_point == NULL)
     {
-        console_output(debugFlag, "k_spawn(): entryPoint is NULL.\n");
+        console_output(debugFlag, "k_spawn(): entry_point is NULL.\n");
         return -1;
     }
-    if (stacksize < THREADS_MIN_STACK_SIZE)
+    if (stack_size < THREADS_MIN_STACK_SIZE)
     {
-        console_output(debugFlag, "k_spawn(): stacksize %d < THREADS_MIN_STACK_SIZE.\n", stacksize);
+        console_output(debugFlag, "k_spawn(): stack_size %d < THREADS_MIN_STACK_SIZE.\n", stack_size);
         return -2;
     }
     if (priority < 0 || priority > HIGHEST_PRIORITY)
     {
-        console_output(debugFlag, "k_spawn(): invalid priority %d. Calling priority clamp\n", priority);
-		priority = clamp_priority(priority);           
+        console_output(debugFlag, "k_spawn(): priority %d out of range.\n", priority);
+        return -3;
+        //console_output(debugFlag, "k_spawn(): invalid priority %d. Calling priority clamp\n", priority); //DEPRECATED?
+		//priority = clamp_priority(priority);           //DEPRECATED??
     }
 
     /* Find an empty slot in the process table */
@@ -239,13 +262,14 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
         return -4;
     }
 
+    enableInterrupts();
     pNewProc = &processTable[proc_slot];
 
     /* Setup the entry in the process table. (PCB initialization) */
     strcpy(pNewProc->name, name);
     pNewProc->pid = (short)nextPid++;
     pNewProc->priority = priority;
-    pNewProc->entryPoint = entryPoint;
+    pNewProc->entryPoint = entry_point;
     pNewProc->args = arg;
 
     pNewProc->status = READY;
@@ -271,7 +295,7 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
     }
 
     /* Initialize context for this process */
-    pNewProc->context = context_initialize(launch, stacksize, pNewProc);
+    pNewProc->context = context_initialize(launch, stack_size, pNewProc);
     if (pNewProc->context == NULL)
     {
         console_output(debugFlag, "k_spawn(): context_initialize failed.\n");
@@ -279,7 +303,6 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
         pNewProc->status = EMPTY;
         return -1;
     }
-
     /* Add the process to the ready list. */
     ready_enqueue(pNewProc);
 
@@ -291,65 +314,48 @@ int k_spawn(char* name, int (*entryPoint)(void*), void* arg, int stacksize, int 
 }
 
 /**************************************************************************
-   Name - launch()
-
-   Purpose - Utility function that makes sure the environment is ready,
-             such as enabling interrupts, for the new process.
-
-   Parameters - Pointer to the process to launch
-
-   Returns - nothing
-*************************************************************************/
-static int launch(void* args)
-{
-    //DebugConsole("launch(): started: %s\n", runningProcess->name);    //test line
-
-    /* Enable interrupts */
-	enableInterrupts();
-
-	//console_output(debugFlag, "Interrupts enabled!\n");               //test line
-
-    /* Call the function passed to spawn and capture its return value */
-    int rc = runningProcess->entryPoint(runningProcess->args);
-
-    //DebugConsole("Process %d returned to launch\n", runningProcess->pid); //test line
-
-    /* Stop the process gracefully */
-    k_exit(rc);
-
-    return 0;
-}
-
-/**************************************************************************
    Name - k_wait()
 
-   Purpose - Wait for a child process to quit.  Return right away if
-             a child has already quit.
+   Purpose - The k_wait function waits for a child process to exit and returns it’s exit code. The
+             function returns when one of the caller’s child processes quits. The pid of the quitting
+             process is returned by the function. For a process with more than one child, this
+             function should be called once for each child process before itself calls k_exit.
 
-   Parameters - Output parameter for the child's exit code.
+   Parameters - p_child_exit_code - A pointer to an integer value that receives the exit code of
+                the process.
 
-   Returns - the pid of the quitting child, or
-             -4 if the process has no children
+   Returns - The function returns the pid of the quitting child upon
+             successful creation. Otherwise, the return value must be one
+             of the following error codes:
+             pid, the PID of the process that exited
+             -1 if the process has no children
              -5 if the process was signaled in the join
+
+   Notes - The caller does not specify a child process to wait for. The function will return after any child of the
+           caller terminates. If one or more child processes has already exited when this function is called, then
+           the function should return right away without waiting and with the information (pid and exit code) from
+           one already terminated child. A parent process must call this function once for every child that was 
+           spawned to ensure the proper termination of a process and to clean up any system resources that the child 
+           process is or was using.
 ************************************************************************ */
-int k_wait(int* code)
+int k_wait(int* p_child_exit_code)
 {
     /* No children */
     if (runningProcess->pChildren == NULL)
     {
-        return -4;
+        return -1;
     }
 
     /* If a child has already quit, return immediately */
     if (runningProcess->zombiePid != -1)
     {
-        if (code) *code = runningProcess->zombieExitCode;
+        if (p_child_exit_code) *p_child_exit_code = runningProcess->zombieExitCode;
 
-        int kidpid = runningProcess->zombiePid;
+        int pid = runningProcess->zombiePid;
         runningProcess->zombiePid = -1;
         runningProcess->zombieExitCode = 0;
 
-        return kidpid;
+        return pid;
     }
 
     /* Otherwise, block this process and run something else. */
@@ -361,35 +367,154 @@ int k_wait(int* code)
     /* When we resume, child exit info should be available */
     if (runningProcess->zombiePid != -1)
     {
-        if (code) *code = runningProcess->zombieExitCode;
+        if (p_child_exit_code) *p_child_exit_code = runningProcess->zombieExitCode;
 
-        int kidpid = runningProcess->zombiePid;
+        int pid = runningProcess->zombiePid;
         runningProcess->zombiePid = -1;
         runningProcess->zombieExitCode = 0;
 
-        return kidpid;
+        return pid;
     }
 
     return -5;
 }
 
 /**************************************************************************
+   Name - k_join()
+
+   Purpose - The k_join function waits for the specified process to terminate and retrieves its exit code.
+
+   Parameters - pid, process ID of the child process to wait for
+                *p_child_exit_code - A pointer to an integer value that receives the exit code of
+                the process.
+
+   Returns - 0 if Successful, -5 if the process was signaled while waiting.
+
+   Notes - Processes cannot join with themselves and cannot join with their parent process. If the process is
+           attempting to join itself or attempting to join a non-existing process, the kernel should be halted with
+           an error code of 1.
+           If the process attempts to join its parent, the kernel should be halted with an error code of 2.
+
+   TO IMPLEMENT & NOTES: (from lecture) Processes cannot join with themselves
+   and cannot join with their parent's process. If the process is attempting
+   to join itself or attempting to join a non-existing process, the kernel
+   should be halted with stop(1);
+
+   OR if the process attempts to join its parent, the kernel should be halted
+   with an error code of 2.
+
+   I also noticed in lecture her function prototype arguments were pid, &exit_code
+   which may differ from *pChildExitCode?
+***************************************************************************/
+int k_join(int pid, int* p_child_exit_code)
+{
+    /* Check if trying to join self or not */
+    if (pid == runningProcess->pid)
+    {
+        /* halts the kernel with error 0x1 */
+        stop(1);
+    }
+
+    /* Find process in the process table */
+    Process* targetProcess = NULL;
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (processTable[i].pid == pid)
+        {
+            targetProcess = &processTable[i];
+            break;
+        }
+    }
+
+    /* Checks if trying to join nothing */
+    if (targetProcess == NULL)
+    {
+        /* halts the kernel with error 0x1 */
+        stop(1);
+    }
+
+    /* Checks if trying to join parent, illegal move. */
+    if (targetProcess->pParent == runningProcess)
+    {
+        /* halts the kernel with error 0x2 */
+        stop(2);
+    }
+
+    return 0;
+}
+
+/**************************************************************************
+   Name - k_kill()
+
+   Purpose - The k_kill function sends a signal to a specified process, allowing it to handle the
+             signal appropriately. The only signal supported is the SIG_TERM signal defined in
+             THREADS. Once a process is signaled, future calls by the process to the signaled
+             function should return a 1.
+
+   Parameters - pid, process ID of the target process
+                signal, the signal to send to the process, SIG_TERM only
+
+   Returns - 0 on success
+
+   Notes - If the specified signal value is not SIG_TERM or if there is an attempt to signal a non-existing
+           process, then the kernel should be halted with an error code of 1.
+           Processes in the Scheduler do not go out of their way to terminate when signaled, this function simply
+           marks the process as signaled, see the function signaled. Note the documentation in functions
+           where a process is blocked and see the required return codes if a process is signaled during its wait
+           time. Future iterations of the kernel use this signal to terminate user-level processes.
+
+*************************************************************************/
+int k_kill(int pid, int signal)
+{
+    /* Find process in the process table */
+    Process* targetProcess = NULL;
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (processTable[i].pid == pid)
+        {
+            targetProcess = &processTable[i];
+            break;
+        }
+    }
+
+    /* If we can't find the process, halt kernel */
+    if (targetProcess == NULL)
+    {
+        stop(1);
+    }
+
+    /* If we have invalid signal, halt kernel */
+    if (signal != SIG_TERM)
+    {
+        stop(1);
+    }
+
+    return 0;
+}
+
+/**************************************************************************
    Name - k_exit()
 
-   Purpose - Exits a process and coordinates with the parent for cleanup
-             and return of the exit code.
+   Purpose - The k_exit function terminates the calling process and sets its exit code.
 
-   Parameters - the code to return to the grieving parent
+   Parameters - exit_code, The processes exit code to set for the exiting child. This value
+                should be overwritten to -5 when if the child process is in a
+                signaled state.
 
-   Returns - nothing
+   Returns - Should never do it.
+
+   Notes - Processes cannot exit if they have one or more active child processes. If a process attempts to quit
+           with an active process, then kernel should be stopped with a code of 1.
+           It is important to coordinate the termination of a child process with its parent process. Note that the
+           SchedulerEntryPoint and the watchdog processes do not have a parent.
 *************************************************************************/
-void k_exit(int code)
+void k_exit(int exit_code)
 {
-    runningProcess->exitCode = code;
+    runningProcess->exitCode = exit_code;
     runningProcess->status = QUIT;
 
     /* Update process run time upon quitting */
-    runningProcess->processRunTime = read_time();   
+    runningProcess->processRunTime = cpu_time();
 
     /* If we have a parent, notify it so k_wait() can return the status. */
     if (runningProcess->pParent != NULL)
@@ -397,7 +522,7 @@ void k_exit(int code)
         Process* parent = runningProcess->pParent;
 
         parent->zombiePid = runningProcess->pid;
-        parent->zombieExitCode = code;
+        parent->zombieExitCode = exit_code;
 
         if (parent->waiting)
         {
@@ -427,94 +552,48 @@ void k_exit(int code)
 }
 
 /**************************************************************************
-   Name - k_kill()
-
-   Purpose - Sends SIG_TERM to a process
-             Marks process as signaled (does not terminate immediately)
-             Invalid pid or signal halts kernel
-
-   Parameters - pid, process ID of the target process
-                signal, the signal number to send
-
-   Returns - 0 on success
-
-   TO IMPLEMENT
-*************************************************************************/
-int k_kill(int pid, int signal)
-{
-    int result = 0;
-    return result;
-}
-
-/**************************************************************************
    Name - k_getpid()
 
-   Purpose - Retrieves the process ID of the running process.
+   Purpose - The k_getpid function returns the process ID of the calling process
 
    Parameters - None
 
-   Returns - The PID of the currently running process, or -1 if none.
+   Returns - The PID of the currently running process
 *************************************************************************/
 int k_getpid()
 {
-    return (runningProcess != NULL) ? runningProcess->pid : -1;
+    if (runningProcess != NULL)
+    {
+        return runningProcess->pid;
+    }
+    //else
+        //return -1; DEPRECATED??
 }
 
-/**************************************************************************
-   Name - k_join()
+/*************************************************************************
+   Name - time_slice()
 
-   Purpose - Waits for a specific process to terminate
-             Illegal joins halt the kernel 
+   Purpose - The time_slice function determines if the currently active
+   process has exceeded its current time slice. If the quantum value has
+   been exceeded the dispatcher is called.
 
-   Parameters - pid, process ID of the target process
-                *pChildExitCode - the pointer to the process child's exit code
-   
-   TO IMPLEMENT & NOTES: (from lecture) Processes cannot join with themselves
-   and cannot join with their parent's process. If the process is attempting
-   to join itself or attempting to join a non-existing process, the kernel
-   should be halted with stop(1); 
-   
-   OR if the process attempts to join its parent, the kernel should be halted
-   with an error code of 2.
+   Parameters - None
 
-   I also noticed in lecture her function prototype arguments were pid, &exit_code
-   which may differ from *pChildExitCode?
-***************************************************************************/
-int k_join(int pid, int* pChildExitCode)
+   Returns - None
+*************************************************************************/
+void time_slice()
 {
-    /* Check if trying to join self or not*/
-    if (pid == runningProcess->pid)
+    /* Is there a process? */
+    if (runningProcess != NULL)
     {
-        /* halts the kernel with error 0x1 */
-        stop(1); 
-    }
-
-    /* find process in the process table */
-    Process* targetProcess = NULL;
-    for (int i = 0; i < MAX_PROCESSES; i++)
-    {
-        if (processTable[i].pid == pid)
+        int currentTime = cpu_time();
+        /* 80 ms, has time slice expired? */
+        if (currentTime >= 80)
         {
-            targetProcess = &processTable[i];
-            break;
+            /* timer expired, time to dispatch */
+            dispatcher();
         }
     }
-    
-    /* Checks if trying to join nothing */
-    if (targetProcess == NULL)
-    {
-        /* halts the kernel with error 0x1 */
-        stop(1);
-    }
-
-    /* Checks if trying to join parent, illegal move. */
-    if (targetProcess->pParent == runningProcess)
-    {
-        /* halts the kernel with error 0x2 */
-        stop(2); 
-    }
-
-    return 0;
 }
 
 /**************************************************************************
@@ -524,36 +603,80 @@ int k_join(int pid, int* pChildExitCode)
 
    Parameters - pid, the process ID
 
-   Retruns - ????
-   
-   TO IMPLEMENT & NOTES: The inverse of block(), moves a blocked process
-   back to a READY state.
-   Fails if pid is invalid or not blocked
-   Does not immediately dispatch the process
+   Retruns - The function returns 0 upon success. Otherwise, an error
+             code is returned.
+             0 - Success
+             -1 - The process specified by pid is not valid or is not blocked.
+
 *************************************************************************/
 int unblock(int pid)
 {
-    //if (pid == valid process)
+    /* Find process in the process table */
+    Process* targetProcess = NULL;
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (processTable[i].pid == pid)
+        {
+            targetProcess = &processTable[i];
+            break;
+        }
+    }
+
+    /* Checks if process exists, if not return -1 */
+    if (targetProcess == NULL)
+    {
+        return -1;
+    }
+
+    /* If process is not blocked, return -1 */
+    if (targetProcess->status <= 10)
+    {
+        return -1;
+    }
+
+    /* Unblock the process */
+    targetProcess->status = READY;
+
+    /* Send to the queue */
+    ready_enqueue(targetProcess);
+
     return 0;
 }
 
 /*************************************************************************
    Name - block()
 
-   Purpose - Blocks the calling process
+   Purpose - This function blocks the calling process and sets the processes status in the process
+                table to the value specified in block_status. The value of block_status must be
+                greater than 10. The values of 0-10 are reserved for internal kernel process states.
 
-   Parameters - newStatus for the block status
+   Parameters - block_status for the block status to be assigned to the blocked process
 
    Returns - -5 if signaled while blocked
-   
-   TO IMPLEMENT & NOTES: 0 on success, -5 if signaled while blocked??
-   newStatus must be >10, in lecture she uses block_status instead of newStatus
-   *Consider swapping newStatus with block_status if it makes more sense
+             0 on successful new process creation
 
-   Are we just making the process NOT_READY?
+   Notes - If this function is called with a value equal to or less than 10, the kernel should be halted with a code of 1:
+            Use integer values 0-10 to keep track of the state of processes in the process table.
+
 *************************************************************************/
-int block(int newStatus)
+int block(int block_status)
 {
+    /* Validate arguments */
+    if (block_status <= 10)
+    {
+        stop(1);
+    }
+
+    /* Assign block_status to blocked */
+    runningProcess->status = block_status;
+
+    /* Was the process signaled? */
+    if (signaled())
+    {
+        return -5;
+    }
+
+    /* 0 on success, new process created */
     return 0;
 }
 
@@ -576,22 +699,24 @@ int signaled()
 }
 
 /*************************************************************************
-   Name - readtime()
+   Name - cpu_time()
 
-   Purpose - Retrieves the current run time of the process that is currently
-   executing during the call. Measured in milliseconds (ms).
+   Purpose - The cpu_time function returns the amount of time in milliseconds that the
+                current process has spent on the CPU.
 
    Parameters - None
 
-   Returns - The runtime of the current running process in milliseconds,
-   or -1 if no process is running.
+   Returns - The runtime of the current running process in milliseconds.
+
+   Notes - Halts the kernel with illegal activity
 *************************************************************************/
-int read_time()
+int cpu_time()
 {
-    /* If running process is null return -1 for time */
+    /* If running process is null stop the kernel */
     if (runningProcess == NULL) 
     {
-        return -1;
+        console_output(debugFlag, "cpu_time(): invalid behavior, no runningProcess. Halting kernel...\n");
+        stop(1);
     }
     if (runningProcess != NULL)
     {
@@ -659,32 +784,6 @@ const char* status_name(int st) {
     case QUIT:    return "QUIT";
     case JOINED:   return "JOINED";
     default:      return "UNKNOWN";
-    }
-}
-
-/*************************************************************************
-   Name - time_slice()
-
-   Purpose - The time_slice function determines if the currently active
-   process has exceeded its current time slice. If the quantum value has
-   been exceeded the dispatcher is called.
-
-   Parameters - None
-
-   Returns - None
-*************************************************************************/
-void time_slice()
-{
-    /*Is there a process?*/
-    if (runningProcess != NULL)
-    {
-        int currentTime = read_time();
-        /*80 ms, has time slice expired?*/
-        if (currentTime >= 80)
-        {
-            /*timer expired, time to dispatch*/
-            dispatcher();
-        }
     }
 }
 
@@ -833,7 +932,7 @@ static void check_deadlock()
         if (processTable[0].status == RUNNING && processTable[i].status != RUNNING) //
         {
             console_output(debugFlag, "All processes completed.\n");
-            runningProcess->processRunTime = read_time();
+            runningProcess->processRunTime = cpu_time();
 
             //display_process_table();      //testline
 
@@ -922,6 +1021,8 @@ static void DebugConsole(char* format, ...)
    Parameters - p, the priority value to the clamped
 
    Returns - The clamped priority value, p (0 ... NUM_PRIORITIES-1)
+
+   TO IMPLEMENT & NOTES - may not be wanted/required for final work
 *************************************************************************/
 static int clamp_priority(int p)
 {
@@ -941,10 +1042,7 @@ static int clamp_priority(int p)
 
    Parameters - char *deviceName, uint8_t command, uint32_t status
 
-   Returns - 0
-
-   TO IMPLEMENT & NOTES: Renamed and prototype aligned with lecture
-   Used to be timer_handler()
+   Returns - None
 *************************************************************************/
 static void clock_handler(char* deviceName, uint8_t command, uint32_t status)
 {
@@ -1055,6 +1153,36 @@ void display_ready_queues(void) {
 
         console_output(debugFlag,"NULL\n");
     }
+}
+
+/**************************************************************************
+   Name - launch()
+
+   Purpose - Utility function that makes sure the environment is ready,
+             such as enabling interrupts, for the new process.
+
+   Parameters - Pointer to the process to launch
+
+   Returns - nothing
+*************************************************************************/
+static int launch(void* args)
+{
+    //DebugConsole("launch(): started: %s\n", runningProcess->name);    //test line
+
+    /* Enable interrupts */
+    enableInterrupts();
+
+    //console_output(debugFlag, "Interrupts enabled!\n");               //test line
+
+    /* Call the function passed to spawn and capture its return value */
+    int rc = runningProcess->entryPoint(runningProcess->args);
+
+    //DebugConsole("Process %d returned to launch\n", runningProcess->pid); //test line
+
+    /* Stop the process gracefully */
+    k_exit(rc);
+
+    return 0;
 }
 
 /**************************************************************************
