@@ -745,6 +745,44 @@ int unblock(int pid)
         return -1;
     }
 
+/**************************************************************************
+   Name - unblock()
+
+   Purpose - The unblock function returns a blocked process to the ready to run state.
+
+   Parameters - pid, the process ID of the process to unblock.
+
+   Retruns - The function returns 0 upon success. Otherwise, an error
+             code is returned.
+             0 - Success
+             -1 - The process specified by pid is not valid or is not blocked.
+
+*************************************************************************/
+int unblock(int pid)
+{
+    /* Find process in the process table */
+    Process* targetProcess = NULL;
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        if (processTable[i].pid == pid)
+        {
+            targetProcess = &processTable[i];
+            break;
+        }
+    }
+
+    /* Checks if process exists, if not return -1 */
+    if (targetProcess == NULL)
+    {
+        return -1;
+    }
+
+    /* If process is not blocked, return -1 */
+    if (targetProcess->status <= 10)
+    {
+        return -1;
+    }
+
     /* Unblock the process */
     targetProcess->status = READY;
 
