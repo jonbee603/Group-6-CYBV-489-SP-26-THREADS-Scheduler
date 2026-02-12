@@ -46,7 +46,7 @@ interrupt_handler_t* intVector; //TO IMPLEMENT
 
 int nextPid = 1;
 int debugFlag = 1;
-int runTimeStart = 0; //used in cpu_time()
+int runTimeStart = 0; //used in cpu_time(), get_start_time()
 
 /* Group 6 Prototypes */
 int bootstrap(void*);
@@ -63,9 +63,9 @@ int block(int);
 int unblock(int); 
 int get_start_time();
 int cpu_time();
-DWORD read_clock(void);
-const char* status_name(int);
+uint32_t read_clock(void);
 void display_process_table(void);
+const char* status_name(int);
 static void watchdog();
 static void check_deadlock();
 static inline void disableInterrupts();
@@ -745,44 +745,6 @@ int unblock(int pid)
         return -1;
     }
 
-/**************************************************************************
-   Name - unblock()
-
-   Purpose - The unblock function returns a blocked process to the ready to run state.
-
-   Parameters - pid, the process ID of the process to unblock.
-
-   Retruns - The function returns 0 upon success. Otherwise, an error
-             code is returned.
-             0 - Success
-             -1 - The process specified by pid is not valid or is not blocked.
-
-*************************************************************************/
-int unblock(int pid)
-{
-    /* Find process in the process table */
-    Process* targetProcess = NULL;
-    for (int i = 0; i < MAX_PROCESSES; i++)
-    {
-        if (processTable[i].pid == pid)
-        {
-            targetProcess = &processTable[i];
-            break;
-        }
-    }
-
-    /* Checks if process exists, if not return -1 */
-    if (targetProcess == NULL)
-    {
-        return -1;
-    }
-
-    /* If process is not blocked, return -1 */
-    if (targetProcess->status <= 10)
-    {
-        return -1;
-    }
-
     /* Unblock the process */
     targetProcess->status = READY;
 
@@ -865,7 +827,7 @@ int cpu_time()
 
    Returns - The function returns the value of system_clock.
 *************************************************************************/
-DWORD read_clock()
+uint32_t read_clock()
 {
     return system_clock();
 }
