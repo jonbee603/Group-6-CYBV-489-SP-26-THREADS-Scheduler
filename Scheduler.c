@@ -621,18 +621,19 @@ void time_slice()
 *************************************************************************/
 void dispatcher()
 {
-    /* Make a placeholder for runningProcess */
+    /* Make a placeholder for runningProcess 
     Process* oldProcess = runningProcess;
 
-    /* If there was a previously running process, save its state */
+    /* If there was a previously running process, save its state 
     if (oldProcess != NULL && oldProcess->status == RUNNING)
     {
         oldProcess->status = READY;
         ready_enqueue(oldProcess);
     }
-
+    */
     /* Get next process to run*/
     Process* nextProcess = ready_dequeue();
+	display_process_table();  //test line
 
     if (nextProcess != NULL)
     {
@@ -879,8 +880,10 @@ void display_process_table()
                 numChildren++;
                 child = child->nextSiblingProcess;
             }
-
-            console_output(debugFlag, "%-5d   %-6d   %-8d   %-13s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, processTable[i].processRunTime, processTable[i].name);
+            if (processTable[i].pid != -1)
+            {
+                console_output(debugFlag, "%-5d   %-6d   %-8d   %-13s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, processTable[i].processRunTime, processTable[i].name);
+            }
         }
 }
 
