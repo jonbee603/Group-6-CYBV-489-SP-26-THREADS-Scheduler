@@ -809,9 +809,9 @@ int cpu_time()
         int currentrunTime = (read_clock() / 1000) - runTimeStart; 
 
         /* Set process run time to current run time in ms */
-        runningProcess->processRunTime = currentrunTime;    
+        runningProcess->processRunTime = currentrunTime + runningProcess->processRunTime;
 
-        //console_output(debugFlag, "Current run time for %s is %d\n", runningProcess->name, currentrunTime);   //testline
+        //console_output(debugFlag,"Current run time for %s is %d\n", runningProcess->name, runningProcess->processRunTime);   //testline
 
         /* Return run time of currently running process in ms */
         return runningProcess->processRunTime;   
