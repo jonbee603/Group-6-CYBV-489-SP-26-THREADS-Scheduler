@@ -279,6 +279,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
 
     pNewProc->waiting = 0;
     pNewProc->zombiePid = -1;
+	pNewProc->signaled = 0;
     pNewProc->zombieExitCode = 0;
     pNewProc->exitCode = 0;
 
@@ -434,11 +435,13 @@ int k_join(int pid, int* p_child_exit_code)
     }
 
     /* Checks if trying to join parent, illegal move. */
-    if (targetProcess->pParent == runningProcess)
+    if (targetProcess->pParent != runningProcess)
     {
         /* halts the kernel with error 0x2 */
         stop(2);
     }
+
+
 
     return 0;
 }
@@ -633,7 +636,7 @@ void dispatcher()
     */
     /* Get next process to run*/
     Process* nextProcess = ready_dequeue();
-	display_process_table();  //test line
+	//display_process_table();  //test line
 
     if (nextProcess != NULL)
     {
@@ -668,7 +671,7 @@ void dispatcher()
 *************************************************************************/
 int signaled()
 {
-    return 0;
+    return runningProcess->signaled ? 1 : 0;
 }
 
 /*************************************************************************
