@@ -27,6 +27,9 @@ TIME SLICE bugs - priority issue? fairness issues
 #define BLOCKED  3
 #define QUIT     4
 #define JOINED   5
+#define K_WAIT  11
+#define K_JOIN  12
+#define K_EXIT  13
 
 #include <stdio.h>
 #include <string.h>
@@ -351,34 +354,30 @@ int k_wait(int* p_child_exit_code)
     while (1)
     {
         /* Search for any zombie child */
-        for (int i = 0; i < MAX_PROCESSES; i++)
+        if (runningProcess->zombiePid != -1)
         {
-			Process* child = &processTable[i];
-
-            if (child->pParent == runningProcess && child->status == QUIT)
+            int pid = runningProcess->zombiePid;
+            if (p_child_exit_code)
             {
-                /* If we have a child that has quit, return its info */
-                int pid = child->pid;
-
-                if (p_child_exit_code)
-                {
-                    *p_child_exit_code = child->exitCode;
-                    cleanup_process(child);
-                    return pid;
-                }
+                *p_child_exit_code = runningProcess->zombieExitCode;
+                runningProcess->zombiePid = -1;
+                runningProcess->zombieExitCode = 0;
+                return pid;
             }
-        }  
-    }
-    /* Otherwise, block this process and run something else. */
-    runningProcess->waiting = 1;
-	int result = block(BLOCKED);
-    /* if resumed due to being signaled */
-    if (result== -5)
-    {
-        return -5;
+        }
+
+        /* If we get here, we have children but they are not zombies, so we need to wait. */
+        runningProcess->waiting = 1;
+        int result = block(K_WAIT);
+
+        /* Process was signaled while waiting */
+        if (result == -5)
+        {
+            runningProcess->waiting = 0;
+            return -5;
+        }
     }
 }
-
 /**************************************************************************
    Name - k_join()
 
@@ -444,11 +443,12 @@ int k_join(int pid, int* p_child_exit_code)
     while (targetProcess->status != QUIT)
     {
         runningProcess-> waiting = 1;
-		int result = block(BLOCKED);
+		int result = block(K_JOIN);
 
         /* if caller was signaled while waiting */
         if (result == -5)
         {
+			runningProcess->waiting = 0;
             return -5;
         }  
 	}
@@ -532,6 +532,10 @@ int k_kill(int pid, int signal)
 *************************************************************************/
 void k_exit(int exit_code)
 {
+    if (signaled())
+    {
+		exit_code = -5;
+    }
     runningProcess->exitCode = exit_code;
     runningProcess->status = QUIT;
 
@@ -543,17 +547,19 @@ void k_exit(int exit_code)
     /* If we have a parent, notify it so k_wait() can return the status. */
     if (parent != NULL)
     {
+        /* Store zombie info */
+		parent->zombiePid = runningProcess->pid;
+        parent->zombieExitCode = exit_code;
+
         /* check if parent is blocked from wait/join and wake if needed */
-        if (parent->waiting && parent->status == BLOCKED)
+        if (parent->waiting && parent->status > 10)
         {
-            parent->waiting = 0;
-            parent->status = READY;
-            ready_enqueue(parent);
+			unblock(parent->pid);
         }
     }
 
     /* Switch to next ready process */
-    dispatcher();
+	block(K_EXIT);
 
     /* Should not return here */
     stop(0);
@@ -629,16 +635,6 @@ void time_slice()
 *************************************************************************/
 void dispatcher()
 {
-    /* Make a placeholder for runningProcess 
-    Process* oldProcess = runningProcess;
-
-    /* If there was a previously running process, save its state 
-    if (oldProcess != NULL && oldProcess->status == RUNNING)
-    {
-        oldProcess->status = READY;
-        ready_enqueue(oldProcess);
-    }
-    */
     /* Get next process to run*/
     Process* nextProcess = ready_dequeue();
 	//display_process_table();  //test line
