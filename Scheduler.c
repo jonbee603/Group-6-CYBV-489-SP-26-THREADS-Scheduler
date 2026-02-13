@@ -514,7 +514,7 @@ void k_exit(int exit_code)
     runningProcess->status = QUIT;
 
     /* Update process run time upon quitting */
-    runningProcess->processRunTime = cpu_time();
+    cpu_time();
 
     /* If we have a parent, notify it so k_wait() can return the status. */
     if (runningProcess->pParent != NULL)
@@ -814,7 +814,7 @@ int cpu_time()
         //console_output(debugFlag,"Current run time for %s is %d\n", runningProcess->name, runningProcess->processRunTime);   //testline
 
         /* Return run time of currently running process in ms */
-        return runningProcess->processRunTime;   
+        return currentrunTime;   
     }
 }
 
@@ -931,7 +931,7 @@ static void check_deadlock()
         if (processTable[0].status == RUNNING && processTable[i].status != RUNNING) //
         {
             console_output(debugFlag, "All processes completed.\n");
-            runningProcess->processRunTime = cpu_time();
+            cpu_time();
 
             //display_process_table();      //testline
 
