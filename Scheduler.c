@@ -54,14 +54,14 @@ int runTimeStart = 0; //used in cpu_time(), get_start_time()
 /* Group 6 Prototypes */
 int bootstrap(void*);
 int k_spawn(char*, int (*entryPoint)(void*), void*, int, int);
-int k_wait(int*); //NEEDS WORK
-int k_join(int, int*); //NEEDS WORK
+int k_wait(int*); //Working??
+int k_join(int, int*); //Working??
 int k_kill(int, int);
 void k_exit(int);
 int k_getpid(void);
 void time_slice();
 void dispatcher(); //NEEDS WORK
-int signaled(void); //TO IMPLEMENT
+int signaled(void);
 int block(int);
 int unblock(int); 
 int get_start_time();
@@ -354,18 +354,20 @@ int k_wait(int* p_child_exit_code)
     while (1)
     {
         /* Search for any zombie child */
-        if (runningProcess->zombiePid != -1)
+		for (int i = 0; i < MAX_PROCESSES; i++)
         {
-            int pid = runningProcess->zombiePid;
-            if (p_child_exit_code)
+			Process* child = &processTable[i];
+            if (child->pParent == runningProcess && child->status == QUIT)
             {
-                *p_child_exit_code = runningProcess->zombieExitCode;
-                runningProcess->zombiePid = -1;
-                runningProcess->zombieExitCode = 0;
+                int pid = child->pid;
+                if (p_child_exit_code)
+                {
+                    *p_child_exit_code = child->exitCode;
+                }
+                cleanup_process(child);
                 return pid;
             }
         }
-
         /* If we get here, we have children but they are not zombies, so we need to wait. */
         runningProcess->waiting = 1;
         int result = block(K_WAIT);
@@ -635,6 +637,22 @@ void time_slice()
 *************************************************************************/
 void dispatcher()
 {
+    if (runningProcess != NULL && runningProcess->status == RUNNING)
+    {
+        int preempt = 0;
+        for (int prio = runningProcess->priority; prio <NUM_PRIORITIES; prio++)
+        {
+			if (ready_queues[prio] != NULL)
+            {
+				preempt = 1;
+                break;
+            }
+        }
+        if (preempt != 1)
+        {
+            return;
+        }
+    }
     /* Get next process to run*/
     Process* nextProcess = ready_dequeue();
 	//display_process_table();  //test line
