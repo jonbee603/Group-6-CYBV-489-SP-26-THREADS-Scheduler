@@ -565,8 +565,7 @@ void k_exit(int exit_code)
     }
 
     /* Chiild exiting, switch to next ready process */
-	runningProcess->status = QUIT;
-	dispatcher();
+    dispatcher();
 
     /* Should not return here */
     stop(0);
@@ -645,7 +644,7 @@ void dispatcher()
     if (runningProcess != NULL && runningProcess->status == RUNNING)
     {
         int preempt = 0;
-        for (int prio = runningProcess->priority; prio <NUM_PRIORITIES; prio++)
+        for (int prio = 5; prio >= runningProcess->priority; prio--)
         {
 			if (ready_queues[prio] != NULL)
             {
