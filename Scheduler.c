@@ -347,37 +347,52 @@ int k_wait(int* p_child_exit_code)
         return -1;
     }
 
-    /* If a child has already quit, return immediately */
-    if (runningProcess->zombiePid != -1)
+    while (1)
     {
-        if (p_child_exit_code) *p_child_exit_code = runningProcess->zombieExitCode;
+        /* Search for any zombie child */
+        for (int i = 0; i < MAX_PROCESSES; i++)
+        {
+			Process* child = &processTable[i];
 
-        int pid = runningProcess->zombiePid;
-        runningProcess->zombiePid = -1;
-        runningProcess->zombieExitCode = 0;
+            if (child->pParent == runningProcess && child->status == QUIT)
+            {
+                /* If we have a child that has quit, return its info */
+                if (p_child_exit_code) *p_child_exit_code = child->exitCode;
+                int pid = child->pid;
 
-        return pid;
+                if (p_child_exit_code)
+                {
+                    *p_child_exit_code = child->exitCode;
+                }
+
+                /* Clean up child process */
+                child->pid = -1;
+                child->status = EMPTY;
+                child->context = NULL;
+                child->pParent = NULL;
+                child->pChildren = NULL;
+                child->nextReadyProcess = NULL;
+                child->nextSiblingProcess = NULL;
+                child->args = NULL;
+                child->exitCode = 0;
+                child->waiting = 0;
+                child->zombiePid = -1;
+                child->zombieExitCode = 0;
+                return pid;
+            }
+        }  
     }
-
     /* Otherwise, block this process and run something else. */
     runningProcess->waiting = 1;
     runningProcess->status = BLOCKED;
 
     dispatcher();
 
-    /* When we resume, child exit info should be available */
-    if (runningProcess->zombiePid != -1)
+   /* if resumed due to being signaled */
+	if (signaled())
     {
-        if (p_child_exit_code) *p_child_exit_code = runningProcess->zombieExitCode;
-
-        int pid = runningProcess->zombiePid;
-        runningProcess->zombiePid = -1;
-        runningProcess->zombieExitCode = 0;
-
-        return pid;
+        return -5;
     }
-
-    return -5;
 }
 
 /**************************************************************************
