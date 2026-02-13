@@ -78,6 +78,7 @@ void ready_enqueue(Process*);
 Process* ready_dequeue(void);
 void display_ready_queues(void);
 static int launch(void*);
+void cleanup_process(Process* proc);
 
 /* DO NOT REMOVE */
 extern int SchedulerEntryPoint(void* pArgs);
@@ -357,39 +358,22 @@ int k_wait(int* p_child_exit_code)
             if (child->pParent == runningProcess && child->status == QUIT)
             {
                 /* If we have a child that has quit, return its info */
-                if (p_child_exit_code) *p_child_exit_code = child->exitCode;
                 int pid = child->pid;
 
                 if (p_child_exit_code)
                 {
                     *p_child_exit_code = child->exitCode;
+                    cleanup_process(child);
+                    return pid;
                 }
-
-                /* Clean up child process */
-                child->pid = -1;
-                child->status = EMPTY;
-                child->context = NULL;
-                child->pParent = NULL;
-                child->pChildren = NULL;
-                child->nextReadyProcess = NULL;
-                child->nextSiblingProcess = NULL;
-                child->args = NULL;
-                child->exitCode = 0;
-                child->waiting = 0;
-                child->zombiePid = -1;
-                child->zombieExitCode = 0;
-                return pid;
             }
         }  
     }
     /* Otherwise, block this process and run something else. */
     runningProcess->waiting = 1;
-    runningProcess->status = BLOCKED;
-
-    dispatcher();
-
-   /* if resumed due to being signaled */
-	if (signaled())
+	int result = block(BLOCKED);
+    /* if resumed due to being signaled */
+    if (result== -5)
     {
         return -5;
     }
@@ -459,13 +443,14 @@ int k_join(int pid, int* p_child_exit_code)
     /* if child has not extied, block caller*/
     while (targetProcess->status != QUIT)
     {
-        int blockResult = block(BLOCKED);
+        runningProcess-> waiting = 1;
+		int result = block(BLOCKED);
 
         /* if caller was signaled while waiting */
-        if (blockResult == -5)
+        if (result == -5)
         {
             return -5;
-		}
+        }  
 	}
 
 	/* if we get here, the child has quit and we can return the exit code */
@@ -475,6 +460,7 @@ int k_join(int pid, int* p_child_exit_code)
     }
 
 	targetProcess->status = JOINED;
+	cleanup_process(targetProcess);
 
     return 0;
 }
@@ -719,6 +705,8 @@ int block(int block_status)
 
     /* Assign block_status to blocked */
     runningProcess->status = block_status;
+
+    dispatcher();
 
     /* Was the process signaled? */
     if (signaled())
@@ -1223,4 +1211,30 @@ static int launch(void* args)
 int check_io_scheduler()
 {
     return false;
+}
+
+/*************************************************************************
+Name void cleanup_process(Process* proc)
+
+Purpose - This function cleans up the process's resources and resets its PCB entry.
+
+Parameters - proc, the process to clean up
+
+Returns - Nothing
+*************************************************************************/
+void cleanup_process(Process* proc)
+{
+    proc->pid = -1;
+    proc->context = NULL;
+    proc->pParent = NULL;
+    proc->pChildren = NULL;
+    proc->nextReadyProcess = NULL;
+    proc->nextSiblingProcess = NULL;
+    proc->args = NULL;
+    proc->exitCode = 0;
+    proc->waiting = 0;
+	proc->signaled = 0;
+    proc->zombiePid = -1;
+    proc->zombieExitCode = 0;
+    proc->status = EMPTY;
 }
