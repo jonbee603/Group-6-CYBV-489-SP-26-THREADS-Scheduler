@@ -434,14 +434,32 @@ int k_join(int pid, int* p_child_exit_code)
         stop(1);
     }
 
-    /* Checks if trying to join parent, illegal move. */
+    /* Checks if target process is a child of the calling process */
     if (targetProcess->pParent != runningProcess)
     {
         /* halts the kernel with error 0x2 */
         stop(2);
     }
+    
+    /* if child has not extied, block caller*/
+    while (targetProcess->status != QUIT)
+    {
+        int blockResult = block(BLOCKED);
 
+        /* if caller was signaled while waiting */
+        if (blockResult == -5)
+        {
+            return -5;
+		}
+	}
 
+	/* if we get here, the child has quit and we can return the exit code */
+    if (p_child_exit_code != NULL)
+    {
+        *p_child_exit_code = targetProcess->exitCode;
+    }
+
+	targetProcess->status = JOINED;
 
     return 0;
 }
@@ -519,31 +537,17 @@ void k_exit(int exit_code)
     /* Update process run time upon quitting */
     cpu_time();
 
+    Process* parent = runningProcess->pParent;
+
     /* If we have a parent, notify it so k_wait() can return the status. */
-    if (runningProcess->pParent != NULL)
+    if (parent != NULL)
     {
-        Process* parent = runningProcess->pParent;
-
-        parent->zombiePid = runningProcess->pid;
-        parent->zombieExitCode = exit_code;
-
-        if (parent->waiting)
+        /* check if parent is blocked from wait/join and wake if needed */
+        if (parent->waiting && parent->status == BLOCKED)
         {
             parent->waiting = 0;
             parent->status = READY;
             ready_enqueue(parent);
-        }
-    }
-
-    /* Clears the process table entry for reuse */
-    for (int i = 0; i < MAX_PROCESSES; i++)
-    {
-        if (processTable[i].pid == runningProcess->pid)
-        {
-            processTable[i].pid = -1;
-            processTable[i].status = EMPTY;
-            processTable[i].context = NULL;
-            break;
         }
     }
 
