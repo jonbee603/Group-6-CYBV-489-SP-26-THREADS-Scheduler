@@ -262,11 +262,11 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     }
     if (proc_slot < 0)
     {
+        enableInterrupts();
         console_output(debugFlag, "k_spawn(): No empty slot in process table.\n");
         return -4;
     }
 
-    enableInterrupts();
     pNewProc = &processTable[proc_slot];
 
     /* Setup the entry in the process table. (PCB initialization) */
@@ -306,10 +306,13 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
         console_output(debugFlag, "k_spawn(): context_initialize failed.\n");
         pNewProc->pid = -1;
         pNewProc->status = EMPTY;
+        enableInterrupts();
         return -1;
     }
     /* Add the process to the ready list. */
     ready_enqueue(pNewProc);
+
+    enableInterrupts();
 
     //check_deadlock();                                                                                                             //testline - Added this to test and see if deadlock would return with processes still active
     //console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority);    //test line
@@ -556,12 +559,14 @@ void k_exit(int exit_code)
         /* check if parent is blocked from wait/join and wake if needed */
         if (parent->waiting && parent->status > 10)
         {
+			parent->waiting = 0;
 			unblock(parent->pid);
         }
     }
 
-    /* Switch to next ready process */
-	block(K_EXIT);
+    /* Chiild exiting, switch to next ready process */
+	runningProcess->status = QUIT;
+	dispatcher();
 
     /* Should not return here */
     stop(0);
@@ -652,6 +657,11 @@ void dispatcher()
         {
             return;
         }
+
+		/* If we get here, we need to preempt the current process because an equal or higher prio was found */
+        runningProcess->status = READY;
+		ready_enqueue(runningProcess);
+
     }
     /* Get next process to run*/
     Process* nextProcess = ready_dequeue();
