@@ -535,6 +535,9 @@ int k_kill(int pid, int signal)
         stop(1);
     }
 
+    /* Marks the process as signaled */
+    targetProcess->signaled = 1;
+
     return 0;
 }
 
@@ -1150,7 +1153,7 @@ void ready_enqueue(Process* p)
 		current->nextReadyProcess = p;
     }
 
-    /* will switch to the higher‑priority process */
+    /* will switch to the higher priority process */
     if (runningProcess && prio > runningProcess->priority)
     {
         dispatcher();          
