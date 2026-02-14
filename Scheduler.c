@@ -41,6 +41,7 @@ TIME SLICE bugs - priority issue? fairness issues
 static Process* readyHead = NULL;
 static Process* readyTail = NULL;
 Process* ready_queues[NUM_PRIORITIES];
+static char argBuffer[MAX_PROCESSES][THREADS_MAX_NAME];
 
 Process processTable[MAX_PROCESSES];
 Process* runningProcess = NULL;
@@ -297,6 +298,24 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     else
     {
         pNewProc->pParent = NULL;
+    }
+
+    /* Copies the arg string into the per-slot buffer */
+    if (arg != NULL) 
+    {
+        size_t len = strlen((char*)arg);
+        if (len >= THREADS_MAX_NAME) 
+        {
+            console_output(debugFlag, "k_spawn(): argument string too long.\n");
+            enableInterrupts();
+            return -1;
+        }
+        strcpy(argBuffer[proc_slot], (char*)arg);
+        pNewProc->args = argBuffer[proc_slot];
+    }
+    else 
+    {
+        pNewProc->args = NULL;
     }
 
     /* Initialize context for this process */
