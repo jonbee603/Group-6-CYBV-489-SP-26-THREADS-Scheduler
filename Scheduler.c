@@ -386,6 +386,26 @@ int k_wait(int* p_child_exit_code)
                 {
                     *p_child_exit_code = child->exitCode;
                 }
+                /* Unlink process from parent's child list */
+                Process* prev = NULL;
+				Process* current = runningProcess->pChildren;
+                while(current != NULL)
+                {
+                    if (current == child)
+                    {
+                        if (prev == NULL)
+                        {
+                            runningProcess->pChildren = current->nextSiblingProcess;
+                        }
+                        else
+                        {
+                            prev->nextSiblingProcess = current->nextSiblingProcess;
+                        }
+                        break;
+                    }
+                    prev = current;
+                    current = current->nextSiblingProcess;
+				}
                 cleanup_process(child);
                 return pid;
             }
