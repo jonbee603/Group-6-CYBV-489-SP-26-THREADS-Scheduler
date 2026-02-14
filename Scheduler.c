@@ -896,6 +896,9 @@ const char* status_name(int st) {
     case BLOCKED: return "BLOCKED";
     case QUIT:    return "QUIT";
     case JOINED:   return "JOINED";
+	case K_WAIT:  return "K_WAIT";
+	case K_JOIN:  return "K_JOIN";
+	case K_EXIT:  return "K_EXIT";
     default:      return "UNKNOWN";
     }
 }
