@@ -682,6 +682,8 @@ void dispatcher()
 		/* If we get here, we need to preempt the current process because an equal or higher prio was found */
         runningProcess->status = READY;
 		ready_enqueue(runningProcess);
+        /* Update process run time upon entering Ready state again */
+        cpu_time();
 
     }
     /* Get next process to run*/
