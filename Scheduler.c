@@ -1149,6 +1149,12 @@ void ready_enqueue(Process* p)
         }
 		current->nextReadyProcess = p;
     }
+
+    /* will switch to the higher‑priority process */
+    if (runningProcess && prio > runningProcess->priority)
+    {
+        dispatcher();          
+    }
 }
 
 /**************************************************************************
