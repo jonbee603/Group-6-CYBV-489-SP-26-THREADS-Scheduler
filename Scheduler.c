@@ -45,22 +45,19 @@ static char argBuffer[MAX_PROCESSES][THREADS_MAX_NAME];
 
 Process processTable[MAX_PROCESSES];
 Process* runningProcess = NULL;
-
-interrupt_handler_t* intVector; //TO IMPLEMENT
-
 int nextPid = 1;
 int debugFlag = 1;
 
 /* Group 6 Prototypes */
 int bootstrap(void*);
 int k_spawn(char*, int (*entryPoint)(void*), void*, int, int);
-int k_wait(int*); //Working??
-int k_join(int, int*); //Working??
+int k_wait(int*); 
+int k_join(int, int*); 
 int k_kill(int, int);
 void k_exit(int);
 int k_getpid(void);
 void time_slice();
-void dispatcher(); //Working?
+void dispatcher();
 int signaled(void);
 int block(int);
 int unblock(int); 
@@ -74,7 +71,6 @@ static void check_deadlock();
 static inline void disableInterrupts();
 static inline void enableInterrupts();
 static void DebugConsole(char*, ...);
-//static int clamp_priority(int); // DEPRECATED?
 static void clock_handler(char*, uint8_t, uint32_t); 
 void ready_queue_init(void);
 void ready_enqueue(Process*);
@@ -85,7 +81,7 @@ void cleanup_process(Process* proc);
 
 /* DO NOT REMOVE */
 extern int SchedulerEntryPoint(void* pArgs);
-int check_io_scheduler(); //TO IMPLEMENT??
+int check_io_scheduler();
 check_io_function check_io;
 
 /*************************************************************************
@@ -327,6 +323,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
         enableInterrupts();
         return -1;
     }
+
     /* Add the process to the ready list. */
     ready_enqueue(pNewProc);
 
@@ -385,9 +382,11 @@ int k_wait(int* p_child_exit_code)
             {
                 *p_child_exit_code = current->exitCode;
             }
+
             /* Remove node from list */
             runningProcess->zombies = current->next; //update head of zombies list
             free(current);
+
             /* cleanup child process */
             for (int i = 0; i < MAX_PROCESSES; i++)
             {
@@ -399,12 +398,13 @@ int k_wait(int* p_child_exit_code)
                 }
             }
 
-			runningProcess->runTimeStart = read_clock(); //restart start time after wait
-			return pid;
+            runningProcess->runTimeStart = read_clock(); //restart start time after wait
+            return pid;
         }
-          
         /* If we get here, we have children but they are not zombies, so we need to wait. */
-		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; //update process run time before blocking
+
+        /* Update process run time before blocking */
+		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; 
         runningProcess->waiting = 1;
         int result = block(K_WAIT);
         runningProcess->waiting = 0;
@@ -418,6 +418,7 @@ int k_wait(int* p_child_exit_code)
         }
     }
 }
+
 /**************************************************************************
    Name - k_join()
 
@@ -433,17 +434,6 @@ int k_wait(int* p_child_exit_code)
            attempting to join itself or attempting to join a non-existing process, the kernel should be halted with
            an error code of 1.
            If the process attempts to join its parent, the kernel should be halted with an error code of 2.
-
-   TO IMPLEMENT & NOTES: (from lecture) Processes cannot join with themselves
-   and cannot join with their parent's process. If the process is attempting
-   to join itself or attempting to join a non-existing process, the kernel
-   should be halted with stop(1);
-
-   OR if the process attempts to join its parent, the kernel should be halted
-   with an error code of 2.
-
-   I also noticed in lecture her function prototype arguments were pid, &exit_code
-   which may differ from *pChildExitCode?
 ***************************************************************************/
 int k_join(int pid, int* p_child_exit_code)
 {
@@ -503,8 +493,10 @@ int k_join(int pid, int* p_child_exit_code)
     {
         *p_child_exit_code = targetProcess->exitCode;
     }
+
 	//cleanup_process(targetProcess); //cleanup child process
-	runningProcess->runTimeStart = read_clock(); //restart start time after wait
+    /* restart start time after wait */
+	runningProcess->runTimeStart = read_clock(); 
 
     return 0;
 }
@@ -559,7 +551,6 @@ int k_kill(int pid, int signal)
 
     /* Marks the process as signaled */
     targetProcess->signaled = 1;
-
     return 0;
 }
 
@@ -598,6 +589,7 @@ void k_exit(int exit_code)
 		exit_code = -5;
     }
     int currentRunTime = read_clock();
+
     /* Update process run time upon quitting */
     if (runningProcess != NULL && runningProcess->status == RUNNING)
     {
@@ -661,8 +653,6 @@ int k_getpid()
     {
         return runningProcess->pid;
     }
-    //else
-        //return -1; DEPRECATED??
 }
 
 /*************************************************************************
@@ -740,8 +730,6 @@ void dispatcher()
         /* If we get here, we need to preempt the current process because an equal or higher prio was found */
         runningProcess->status = READY;
         ready_enqueue(runningProcess);
-
-
     }
     /* Get next process to run*/
     Process* nextProcess = ready_dequeue();
@@ -809,20 +797,17 @@ int block(int block_status)
     /* Validate arguments */
     if (block_status <= 10)
     {
-		console_output(debugFlag, "block: function called with a reserved status value.\n", block_status);
+        console_output(debugFlag, "block: function called with a reserved status value.\n", block_status);
         stop(1);
     }
-
     /* Was the process signaled? */
     if (signaled())
     {
         return -5;
     }
-
     /* Assign block_status to blocked */
     runningProcess->status = block_status;
     dispatcher();
-
     /* Check again context switch */
     if (signaled())
     {
@@ -876,7 +861,6 @@ int unblock(int pid)
 
     /* Send to the queue */
     ready_enqueue(targetProcess);
-
     return 0;
 }
 
@@ -902,7 +886,6 @@ int get_start_time()
             runningProcess->runTimeStart = read_clock();
         }
         return runningProcess->runTimeStart;
-
     }
     else
     {
@@ -913,7 +896,7 @@ int get_start_time()
 }
 
 /*************************************************************************
-   Name - cpu_time()
+   Name - cpu_time()/read_time() naming convention as required by test30
 
    Purpose - The cpu_time function returns the amount of time in milliseconds that the
                 current process has spent on the CPU.
@@ -1037,7 +1020,6 @@ void display_process_table()
 static void watchdog()
 {
     //DebugConsole("watchdog(): called\n"); //test line
-
     while (1)
     {
         /* as the system idles here, the timer is to keep the program alive if processes are running */
@@ -1057,7 +1039,6 @@ static void watchdog()
 static void check_deadlock()
 {
     //display_process_table();  //testline
-
     int done = 1;
     /* Begin indexing after watchdog, and if its the only process left, stop on 0. */
     for (int i = 1; i < MAX_PROCESSES; i++)
@@ -1123,7 +1104,6 @@ static inline void enableInterrupts()
     psr = psr | PSR_INTERRUPTS;
 
     set_psr(psr);
-
 }
 
 /**************************************************************************
@@ -1146,31 +1126,7 @@ static void DebugConsole(char* format, ...)
         vsprintf(buffer, format, argptr);
         console_output(TRUE, buffer);
         va_end(argptr);
-
     }
-}
-
-/**************************************************************************
-   Name - clamp_priority()
-
-   Purpose - Ensures that the priority value supplied by the caller is 
-   within the valid range of NUM_PRIORITIES.
-
-   Parameters - p, the priority value to the clamped
-
-   Returns - The clamped priority value, p (0 ... NUM_PRIORITIES-1)
-
-   TO IMPLEMENT & NOTES - may not be wanted/required for final work
-*************************************************************************/
-static int clamp_priority(int p)
-{
-    if (p < 0)
-        return 0;
-
-    if (p >= NUM_PRIORITIES)
-        return NUM_PRIORITIES - 1;
-
-    return p;
 }
 
 /**************************************************************************
@@ -1253,13 +1209,16 @@ void ready_enqueue(Process* p)
 *************************************************************************/
 Process* ready_dequeue(void)
 {
-	for (int prio = NUM_PRIORITIES - 1; prio >= 0; prio--)  //Dequeues from highest priority queue first
+    /* Dequeues from highest priority queue first */
+	for (int prio = NUM_PRIORITIES - 1; prio >= 0; prio--)
     {
-		if (ready_queues[prio] != NULL)                     //If queue is not empty
+        /* If queue is not empty get process at head and update the head for the next process */
+		if (ready_queues[prio] != NULL)                    
         {
-			Process* p = ready_queues[prio];                //Get process at head of queue
-			ready_queues[prio] = p->nextReadyProcess;       //Update head to next process in queue
-			p->nextReadyProcess = NULL;                     //Clear next pointer of dequeued process
+			Process* p = ready_queues[prio];              
+			ready_queues[prio] = p->nextReadyProcess;       
+            /* Clear the next pointer of the dequeued process */
+			p->nextReadyProcess = NULL;                     
             return p;
         }
     }
@@ -1276,7 +1235,8 @@ Process* ready_dequeue(void)
 
    Returns - Nothing
 *************************************************************************/
-void display_ready_queues(void) {
+void display_ready_queues(void) 
+{
 	console_output(debugFlag, "\nREADY QUEUES:\n");
     for (int prio = 0; prio < NUM_PRIORITIES; prio++) 
     {
@@ -1382,6 +1342,8 @@ void cleanup_process(Process* proc)
             current = current->nextSiblingProcess;
         }
     }
+
+    /* Reset the PCB */
     proc->pid = -1;
     proc->context = NULL;
     proc->pParent = NULL;
