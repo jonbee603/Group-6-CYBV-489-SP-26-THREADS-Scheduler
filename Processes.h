@@ -37,7 +37,5 @@ typedef struct _process
 	int            exitCode;			 /* this process's exit code */
 	int            waiting;              /* 1 if blocked in k_wait */
 	int			   signaled;			 /* 1 if process has been signaled to unblock */
-	short          zombiePid;            /* child's pid ready to collect */
-	int            zombieExitCode;       /* child's exit code */
 } Process;
 

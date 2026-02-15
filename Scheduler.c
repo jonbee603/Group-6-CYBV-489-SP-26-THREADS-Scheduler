@@ -131,8 +131,6 @@ int bootstrap(void* pArgs)
         processTable[i].args = NULL;
         processTable[i].exitCode = 0;
         processTable[i].waiting = 0;
-        processTable[i].zombiePid = -1;
-        processTable[i].zombieExitCode = 0;
     }
     
     /* Initialize the Ready list, etc. */
@@ -290,9 +288,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     pNewProc->nextReadyProcess = NULL;
 
     pNewProc->waiting = 0;
-    pNewProc->zombiePid = -1;
 	pNewProc->signaled = 0;
-    pNewProc->zombieExitCode = 0;
     pNewProc->exitCode = 0;
 
     /* If there is a parent process, add this to the list of children. */
@@ -1383,7 +1379,5 @@ void cleanup_process(Process* proc)
     proc->exitCode = 0;
     proc->waiting = 0;
 	proc->signaled = 0;
-    proc->zombiePid = -1;
-    proc->zombieExitCode = 0;
     proc->status = EMPTY;
 }
