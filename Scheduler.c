@@ -127,6 +127,7 @@ int bootstrap(void* pArgs)
         processTable[i].args = NULL;
         processTable[i].exitCode = 0;
         processTable[i].waiting = 0;
+        processTable[i].joinTarget = -1;
     }
     
     /* Initialize the Ready list, etc. */
@@ -282,6 +283,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     pNewProc->waiting = 0;
 	pNewProc->signaled = 0;
     pNewProc->exitCode = 0;
+    pNewProc->joinTarget = -1;
 
     /* If there is a parent process, add this to the list of children. */
     if (runningProcess != NULL)
@@ -437,6 +439,9 @@ int k_wait(int* p_child_exit_code)
 ***************************************************************************/
 int k_join(int pid, int* p_child_exit_code)
 {
+    /* Remember which pid we are joining so that the exiting child can wake us up */
+    runningProcess->joinTarget = pid;
+
     /* Check if trying to join self or not */
     if (pid == runningProcess->pid)
     {
@@ -477,13 +482,13 @@ int k_join(int pid, int* p_child_exit_code)
 		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; //update process run time before blocking
         runningProcess-> waiting = 1;
 		int result = block(K_JOIN);
-        runningProcess->waiting = 0;
 
         /* if caller was signaled while waiting */
         if (result == -5)
         {
-            /* Restart start time */
+            /* Restart start time & cleanup join target */
             runningProcess->runTimeStart = read_clock();
+            runningProcess->joinTarget = -1;
             return -5;
         } 
 	}
@@ -495,8 +500,9 @@ int k_join(int pid, int* p_child_exit_code)
     }
 
 	//cleanup_process(targetProcess); //cleanup child process
-    /* restart start time after wait */
+    /* restart start time after wait & cleanup join target */
 	runningProcess->runTimeStart = read_clock(); 
+    runningProcess->joinTarget = -1;
 
     return 0;
 }
@@ -631,7 +637,20 @@ void k_exit(int exit_code)
         }
     }
 
-    /* Chiild exiting, switch to next ready process */
+    /* Wake up every process that is blocked in a k_join() */
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        Process* proc = &processTable[i];
+        if (proc->pid != -1 && proc->status == K_JOIN && proc->joinTarget == runningProcess->pid)
+        {
+            console_output(debugFlag, "k_exit: unblocking joiner pid %d for target %d\n", proc->pid, runningProcess->pid);
+            proc->waiting = 0;
+            proc->joinTarget = -1;
+            unblock(proc->pid);
+        }
+    }
+
+    /* Child exiting, switch to next ready process */
     dispatcher();
 
     /* Should not return here */
@@ -805,9 +824,12 @@ int block(int block_status)
     {
         return -5;
     }
-    /* Assign block_status to blocked */
+
+    /* Assign status to K_WAIT */
     runningProcess->status = block_status;
+
     dispatcher();
+
     /* Check again context switch */
     if (signaled())
     {
@@ -835,6 +857,7 @@ int unblock(int pid)
 {
     /* Find process in the process table */
     Process* targetProcess = NULL;
+
     for (int i = 0; i < MAX_PROCESSES; i++)
     {
         if (processTable[i].pid == pid)
@@ -1048,7 +1071,7 @@ static void check_deadlock()
         {
             int stat = processTable[i].status;
             /* Checks if a process is finished */
-            if (stat != EMPTY && stat != QUIT && stat != JOINED)
+            if (stat != EMPTY && stat != QUIT && stat != JOINED && stat != K_WAIT && stat != K_JOIN)
             {
                 done = 0;
                 break;
@@ -1355,4 +1378,5 @@ void cleanup_process(Process* proc)
     proc->waiting = 0;
 	proc->signaled = 0;
     proc->status = EMPTY;
+    proc->joinTarget = -1;
 }
