@@ -456,6 +456,7 @@ int k_join(int pid, int* p_child_exit_code)
     if (pid == runningProcess->pid)
     {
         /* halts the kernel with error 0x1 */
+		console_output(debugFlag, "join: process attempted to join itself.\n");
         stop(1);
     }
 
@@ -474,6 +475,7 @@ int k_join(int pid, int* p_child_exit_code)
     if (targetProcess == NULL)
     {
         /* halts the kernel with error 0x1 */
+		console_output(debugFlag, "join: process attempted to join non-existing process.\n");
         stop(1);
     }
 
@@ -549,12 +551,14 @@ int k_kill(int pid, int signal)
     /* If we can't find the process, halt kernel */
     if (targetProcess == NULL)
     {
+		console_output(debugFlag, "kill: process with pid %d not found.\n", pid);
         stop(1);
     }
 
     /* If we have invalid signal, halt kernel */
     if (signal != SIG_TERM)
     {
+		console_output(debugFlag, "kill: invalid signal %d.\n", signal);
         stop(1);
     }
 
@@ -585,6 +589,7 @@ void k_exit(int exit_code)
     /* Verifies we are in kernel mode */
     if ((get_psr() & PSR_KERNEL_MODE) == 0)
     {
+		console_output(debugFlag, "Kernel mode expected, but function called in user mode.\n");
         stop(1);
     }
 	if (runningProcess->pChildren != NULL)
@@ -804,6 +809,7 @@ int block(int block_status)
     /* Validate arguments */
     if (block_status <= 10)
     {
+		console_output(debugFlag, "block(): invalid block_status %d. Halting...\n", block_status);
         stop(1);
     }
 
