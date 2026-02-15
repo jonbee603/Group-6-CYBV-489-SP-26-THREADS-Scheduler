@@ -238,11 +238,6 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
         console_output(debugFlag, "k_spawn(): entry_point is NULL.\n");
         return -1;
     }
-    if (entry_point == NULL)
-    {
-        console_output(debugFlag, "k_spawn(): entry_point is NULL.\n");
-        return -1;
-    }
     if (stack_size < THREADS_MIN_STACK_SIZE)
     {
         console_output(debugFlag, "k_spawn(): stack_size %d < THREADS_MIN_STACK_SIZE.\n", stack_size);
@@ -725,32 +720,32 @@ void dispatcher()
     if (runningProcess != NULL && runningProcess->status == RUNNING)
     {
         /* Add CPU time of current process */
-		runningProcess->processRunTime += (currentRunTime - runningProcess->runTimeStart) / 1000;
+        runningProcess->processRunTime += (currentRunTime - runningProcess->runTimeStart) / 1000;
 
         int preempt = 0;
         for (int prio = 5; prio >= runningProcess->priority; prio--)
         {
-			if (ready_queues[prio] != NULL)
+            if (ready_queues[prio] != NULL)
             {
-				preempt = 1;
+                preempt = 1;
                 break;
             }
         }
         if (preempt != 1)
         {
-			runningProcess->runTimeStart = currentRunTime; //reset start time for currently running process
+            runningProcess->runTimeStart = currentRunTime; //reset start time for currently running process
             return;
         }
 
-		/* If we get here, we need to preempt the current process because an equal or higher prio was found */
+        /* If we get here, we need to preempt the current process because an equal or higher prio was found */
         runningProcess->status = READY;
-		ready_enqueue(runningProcess);
-        
+        ready_enqueue(runningProcess);
+
 
     }
     /* Get next process to run*/
     Process* nextProcess = ready_dequeue();
-	//display_process_table();  //test line
+    //display_process_table();  //test line
 
     if (nextProcess != NULL)
     {
@@ -758,7 +753,7 @@ void dispatcher()
         runningProcess->status = RUNNING;
 
         /* Reset start time for this process */
-		runningProcess->runTimeStart = currentRunTime;
+        runningProcess->runTimeStart = currentRunTime;
 
         /* IMPORTANT: context switch enables interrupts. */
         context_switch(runningProcess->context);
@@ -780,12 +775,17 @@ void dispatcher()
    Returns - 1 if signaled, 0 if otherwise
 
    Side Effects/Use Cases - Used by k_wait(), k_join(), and block()
-
-   TO IMPLEMENT
 *************************************************************************/
 int signaled()
 {
-    return runningProcess->signaled ? 1 : 0;
+    if (runningProcess->signaled)
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
 /*************************************************************************
