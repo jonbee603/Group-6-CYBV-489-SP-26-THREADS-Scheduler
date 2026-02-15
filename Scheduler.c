@@ -210,6 +210,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     /* Verifies we are in kernel mode */
     if ((get_psr() & PSR_KERNEL_MODE) == 0)
     {
+		console_output(debugFlag, "Kernel mode expected, but function called in user mode.\n");
         stop(1);
     }
 
