@@ -585,6 +585,11 @@ void k_exit(int exit_code)
     {
         stop(1);
     }
+	if (runningProcess->pChildren != NULL)
+    {
+        console_output(debugFlag, "quit(): Process with active children attempting to quit\n");
+        stop(1);
+    }
 
     if (signaled())
     {
