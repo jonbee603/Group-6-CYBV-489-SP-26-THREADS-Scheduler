@@ -50,7 +50,6 @@ interrupt_handler_t* intVector; //TO IMPLEMENT
 
 int nextPid = 1;
 int debugFlag = 1;
-int runTimeStart = 0; //used in cpu_time(), get_start_time()
 
 /* Group 6 Prototypes */
 int bootstrap(void*);
@@ -278,6 +277,8 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     pNewProc->args = arg;
 
     pNewProc->status = READY;
+	pNewProc->processRunTime = 0;
+	pNewProc->runTimeStart = 0;
     pNewProc->pChildren = NULL;
     pNewProc->nextSiblingProcess = NULL;
     pNewProc->nextReadyProcess = NULL;
@@ -411,12 +412,15 @@ int k_wait(int* p_child_exit_code)
             }
         }
         /* If we get here, we have children but they are not zombies, so we need to wait. */
+		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; //update process run time before blocking
         runningProcess->waiting = 1;
         int result = block(K_WAIT);
 
         /* Process was signaled while waiting */
         if (result == -5)
         {
+            /* Restart start time */
+            runningProcess->runTimeStart = read_clock();
             runningProcess->waiting = 0;
             return -5;
         }
@@ -486,15 +490,18 @@ int k_join(int pid, int* p_child_exit_code)
     /* if child has not extied, block caller*/
     while (targetProcess->status != QUIT)
     {
+		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; //update process run time before blocking
         runningProcess-> waiting = 1;
 		int result = block(K_JOIN);
 
         /* if caller was signaled while waiting */
         if (result == -5)
         {
+            /* Restart start time */
+            runningProcess->runTimeStart = read_clock();
 			runningProcess->waiting = 0;
             return -5;
-        }  
+        } 
 	}
 
 	/* if we get here, the child has quit and we can return the exit code */
@@ -583,11 +590,15 @@ void k_exit(int exit_code)
     {
 		exit_code = -5;
     }
+    int currentRunTime = read_clock();
+    /* Update process run time upon quitting */
+    if (runningProcess != NULL && runningProcess->status == RUNNING)
+    {
+        runningProcess->processRunTime += (currentRunTime - runningProcess->runTimeStart) / 1000;
+    }
+
     runningProcess->exitCode = exit_code;
     runningProcess->status = QUIT;
-
-    /* Update process run time upon quitting */
-    cpu_time();
 
     Process* parent = runningProcess->pParent;
 
@@ -650,9 +661,8 @@ void time_slice()
     /* Is there a process? */
     if (runningProcess != NULL)
     {
-        int currentTime = cpu_time();
         /* 80 ms, has time slice expired? */
-        if (currentTime >= 80)
+        if ((read_clock() - runningProcess->runTimeStart) / 1000 >= 80)
         {
             /* timer expired, time to dispatch */
             dispatcher();
@@ -683,8 +693,13 @@ void time_slice()
 *************************************************************************/
 void dispatcher()
 {
+    int currentRunTime = read_clock();
+
     if (runningProcess != NULL && runningProcess->status == RUNNING)
     {
+        /* Add CPU time of current process */
+		runningProcess->processRunTime += (currentRunTime - runningProcess->runTimeStart) / 1000;
+
         int preempt = 0;
         for (int prio = 5; prio >= runningProcess->priority; prio--)
         {
@@ -696,12 +711,11 @@ void dispatcher()
         }
         if (preempt != 1)
         {
+			runningProcess->runTimeStart = currentRunTime; //reset start time for currently running process
             return;
         }
 
 		/* If we get here, we need to preempt the current process because an equal or higher prio was found */
-        /* Update process run time upon entering Ready state again */
-        cpu_time();
         runningProcess->status = READY;
 		ready_enqueue(runningProcess);
         
@@ -717,7 +731,7 @@ void dispatcher()
         runningProcess->status = RUNNING;
 
         /* Reset start time for this process */
-        get_start_time();
+		runningProcess->runTimeStart = currentRunTime;
 
         /* IMPORTANT: context switch enables interrupts. */
         context_switch(runningProcess->context);
@@ -849,17 +863,20 @@ int get_start_time()
     /* Is a process running? */
     if (runningProcess != NULL)
     {
-        /* Reads clock and divides by 1000 for time in ms */
-        runTimeStart = (read_clock() / 1000);
+        if (runningProcess->runTimeStart == 0)
+        {
+            /* Reads clock and divides by 1000 for time in ms */
+            runningProcess->runTimeStart = read_clock();
+        }
+        return runningProcess->runTimeStart;
 
-        //console_output(debugFlag, "Starting run time for %s is %d \n", runningProcess->name, runTimeStart);   //testline
-
-        /* Return start time in ms */
-        return runTimeStart;
     }
     else
-    /* Halts the kernel, no running process, this is illegal */
+    {
+        /* Halts the kernel, no running process, this is illegal */
+        console_output(debugFlag, "get_start_time(): invalid behavior, no runningProcess. Halting kernel...\n");
         stop(1);
+    }
 }
 
 /*************************************************************************
@@ -885,15 +902,13 @@ int cpu_time()
     if (runningProcess != NULL)
     {
         /* Current time program has been running in ms */
-        int currentrunTime = (read_clock() / 1000) - runTimeStart; 
-
-        /* Set process run time to current run time in ms */
-        runningProcess->processRunTime = currentrunTime + runningProcess->processRunTime;
+        int currentRunTime = read_clock();
+		int currentProcessTime = (currentRunTime - runningProcess->runTimeStart) / 1000; //convert to ms
 
         //console_output(debugFlag,"Current run time for %s is %d\n", runningProcess->name, runningProcess->processRunTime);   //testline
 
         /* Return run time of currently running process in ms */
-        return currentrunTime;   
+        return runningProcess->processRunTime + currentProcessTime;
     }
 }
 
@@ -961,9 +976,16 @@ void display_process_table()
                 numChildren++;
                 child = child->nextSiblingProcess;
             }
+            /* Get CPU time */
+			int currentRunTime = processTable[i].processRunTime;
+            /* If the process is currently running, get current time */
+			if (runningProcess != NULL && processTable[i].pid == runningProcess->pid)
+            {
+				currentRunTime += (read_clock() - runningProcess->runTimeStart) / 1000;
+            }
             if (processTable[i].pid != -1)
             {
-                console_output(debugFlag, "%-5d   %-6d   %-8d   %-13s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, processTable[i].processRunTime, processTable[i].name);
+                console_output(debugFlag, "%-5d   %-6d   %-8d   %-13s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, currentRunTime, processTable[i].name);
             }
         }
 }
@@ -1015,7 +1037,6 @@ static void check_deadlock()
         if (processTable[0].status == RUNNING && processTable[i].status != RUNNING) //
         {
             console_output(debugFlag, "All processes completed.\n");
-            cpu_time();
 
             //display_process_table();      //testline
 

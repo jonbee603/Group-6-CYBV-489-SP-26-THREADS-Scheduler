@@ -24,6 +24,7 @@ typedef struct _process
 	unsigned int   stacksize;			 /* Length/size of the stack */
 	int            status;               /* READY, QUIT, BLOCKED, etc. */
 	int			   processRunTime;       /* Total time process has run */
+	int			   runTimeStart;		 /* used in cpu_time(), get_start_time() */
 	void* args;							 /* argument passed to entryPoint */
 	int            exitCode;			 /* this process's exit code */
 	int            waiting;              /* 1 if blocked in k_wait */
