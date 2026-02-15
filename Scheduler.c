@@ -65,7 +65,7 @@ int signaled(void);
 int block(int);
 int unblock(int); 
 int get_start_time();
-int cpu_time();
+int read_time();
 uint32_t read_clock(void);
 void display_process_table(void);
 const char* status_name(int);
@@ -809,7 +809,7 @@ int block(int block_status)
     /* Validate arguments */
     if (block_status <= 10)
     {
-		console_output(debugFlag, "block(): invalid block_status %d. Halting...\n", block_status);
+		console_output(debugFlag, "block: function called with a reserved status value.\n", block_status);
         stop(1);
     }
 
@@ -924,12 +924,12 @@ int get_start_time()
 
    Notes - Halts the kernel with illegal activity
 *************************************************************************/
-int cpu_time()
+int read_time()
 {
     /* If running process is null stop the kernel */
     if (runningProcess == NULL) 
     {
-        console_output(debugFlag, "cpu_time(): invalid behavior, no runningProcess. Halting kernel...\n");
+        console_output(debugFlag, "read_time(): invalid behavior, no runningProcess. Halting kernel...\n");
         stop(1);
     }
     if (runningProcess != NULL)
@@ -966,9 +966,9 @@ const char* status_name(int st) {
     case RUNNING: return "RUNNING";
     case BLOCKED: return "BLOCKED";
     case QUIT:    return "QUIT";
-    case JOINED:   return "JOINED";
+    case JOINED:  return "JOINED";
 	case K_WAIT:  return "WAIT BLOCK";
-	case K_JOIN:  return "K_JOIN";
+	case K_JOIN:  return "JOIN BLOCK";
 	case K_EXIT:  return "K_EXIT";
     default:      return "UNKNOWN";
     }
