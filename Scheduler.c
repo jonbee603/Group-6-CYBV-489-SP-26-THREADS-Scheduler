@@ -479,6 +479,7 @@ int k_join(int pid, int* p_child_exit_code)
     /* Do not allow joining the parent only */
     if (targetProcess == runningProcess->pParent)
     {
+		console_output(debugFlag, "join: process attempted to join parent.\n");
         stop(2);
     }
     
