@@ -75,7 +75,7 @@ static inline void disableInterrupts();
 static inline void enableInterrupts();
 static void DebugConsole(char*, ...);
 //static int clamp_priority(int); // DEPRECATED?
-static void clock_handler(char*, uint8_t, uint32_t); //TO IMPLEMENT
+static void clock_handler(char*, uint8_t, uint32_t); 
 void ready_queue_init(void);
 void ready_enqueue(Process*);
 Process* ready_dequeue(void);
@@ -209,6 +209,12 @@ int bootstrap(void* pArgs)
 *************************************************************************/
 int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, int priority)
 {
+    /* Verifies we are in kernel mode */
+    if ((get_psr() & PSR_KERNEL_MODE) == 0)
+    {
+        stop(1);
+    }
+
     int proc_slot = -1;
     Process* pNewProc = NULL;
 
@@ -480,10 +486,9 @@ int k_join(int pid, int* p_child_exit_code)
         stop(1);
     }
 
-    /* Checks if target process is a child of the calling process */
-    if (targetProcess->pParent != runningProcess)
+    /* Do not allow joining the parent only */
+    if (targetProcess == runningProcess->pParent)
     {
-        /* halts the kernel with error 0x2 */
         stop(2);
     }
     
@@ -509,9 +514,6 @@ int k_join(int pid, int* p_child_exit_code)
     {
         *p_child_exit_code = targetProcess->exitCode;
     }
-
-	targetProcess->status = JOINED;
-	cleanup_process(targetProcess);
 
     return 0;
 }
@@ -586,6 +588,12 @@ int k_kill(int pid, int signal)
 *************************************************************************/
 void k_exit(int exit_code)
 {
+    /* Verifies we are in kernel mode */
+    if ((get_psr() & PSR_KERNEL_MODE) == 0)
+    {
+        stop(1);
+    }
+
     if (signaled())
     {
 		exit_code = -5;
@@ -785,12 +793,17 @@ int block(int block_status)
         stop(1);
     }
 
+    /* Was the process signaled? */
+    if (signaled())
+    {
+        return -5;
+    }
+
     /* Assign block_status to blocked */
     runningProcess->status = block_status;
-
     dispatcher();
 
-    /* Was the process signaled? */
+    /* Check again context switch */
     if (signaled())
     {
         return -5;
@@ -934,7 +947,7 @@ const char* status_name(int st) {
     case BLOCKED: return "BLOCKED";
     case QUIT:    return "QUIT";
     case JOINED:   return "JOINED";
-	case K_WAIT:  return "K_WAIT";
+	case K_WAIT:  return "WAIT BLOCK";
 	case K_JOIN:  return "K_JOIN";
 	case K_EXIT:  return "K_EXIT";
     default:      return "UNKNOWN";
@@ -1023,30 +1036,31 @@ static void watchdog()
  *************************************************************************/
 static void check_deadlock()
 {
-    if (check_io() == 1)
-    {
-        return;
-    }
-    
     //display_process_table();  //testline
 
-    /* Begin indexing after watchdog */
+    int done = 1;
+    /* Begin indexing after watchdog, and if its the only process left, stop on 0. */
     for (int i = 1; i < MAX_PROCESSES; i++)
     {
         /* Check if watchdog is the only process running */
-        if (processTable[0].status == RUNNING && processTable[i].status != RUNNING) //
+        if (processTable[i].pid != -1)
         {
-            console_output(debugFlag, "All processes completed.\n");
-
-            //display_process_table();      //testline
-
-            stop(0);
-        }
-        else /* processes are running */
-        {
-            stop(1);
+            int stat = processTable[i].status;
+            /* Checks if a process is finished */
+            if (stat != EMPTY && stat != QUIT && stat != JOINED)
+            {
+                done = 0;
+                break;
+            }
         }
     } 
+
+    if (done == 1)
+    {
+        console_output(debugFlag, "All processes completed.\n");
+        //display_process_table();      //testline
+        stop(0);
+    }
 }
 
 /**************************************************************************
