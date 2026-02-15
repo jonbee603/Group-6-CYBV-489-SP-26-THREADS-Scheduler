@@ -60,7 +60,7 @@ int k_kill(int, int);
 void k_exit(int);
 int k_getpid(void);
 void time_slice();
-void dispatcher(); //NEEDS WORK
+void dispatcher(); //Working?
 int signaled(void);
 int block(int);
 int unblock(int); 
