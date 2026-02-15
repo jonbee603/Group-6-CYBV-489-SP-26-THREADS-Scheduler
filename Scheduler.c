@@ -382,52 +382,46 @@ int k_wait(int* p_child_exit_code)
 
     while (1)
     {
+        ZombieNode* prev = NULL;
+		ZombieNode* current = runningProcess->zombies;
+
         /* Search for any zombie child */
-		for (int i = 0; i < MAX_PROCESSES; i++)
+        if (current != NULL)
         {
-			Process* child = &processTable[i];
-            if (child->pParent == runningProcess && child->status == QUIT)
+            int pid = current->pid;
+            if (p_child_exit_code)
             {
-                int pid = child->pid;
-                if (p_child_exit_code)
-                {
-                    *p_child_exit_code = child->exitCode;
-                }
-                /* Unlink process from parent's child list */
-                Process* prev = NULL;
-				Process* current = runningProcess->pChildren;
-                while(current != NULL)
-                {
-                    if (current == child)
-                    {
-                        if (prev == NULL)
-                        {
-                            runningProcess->pChildren = current->nextSiblingProcess;
-                        }
-                        else
-                        {
-                            prev->nextSiblingProcess = current->nextSiblingProcess;
-                        }
-                        break;
-                    }
-                    prev = current;
-                    current = current->nextSiblingProcess;
-				}
-                cleanup_process(child);
-                return pid;
+                *p_child_exit_code = current->exitCode;
             }
+            /* Remove node from list */
+            runningProcess->zombies = current->next; //update head of zombies list
+            free(current);
+            /* cleanup child process */
+            for (int i = 0; i < MAX_PROCESSES; i++)
+            {
+                Process* child = &processTable[i];
+                if (child->pid == pid)
+                {
+                    cleanup_process(child);
+                    break;
+                }
+            }
+
+			runningProcess->runTimeStart = read_clock(); //restart start time after wait
+			return pid;
         }
+          
         /* If we get here, we have children but they are not zombies, so we need to wait. */
 		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; //update process run time before blocking
         runningProcess->waiting = 1;
         int result = block(K_WAIT);
+        runningProcess->waiting = 0;
 
         /* Process was signaled while waiting */
         if (result == -5)
         {
             /* Restart start time */
             runningProcess->runTimeStart = read_clock();
-            runningProcess->waiting = 0;
             return -5;
         }
     }
@@ -498,13 +492,13 @@ int k_join(int pid, int* p_child_exit_code)
 		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; //update process run time before blocking
         runningProcess-> waiting = 1;
 		int result = block(K_JOIN);
+        runningProcess->waiting = 0;
 
         /* if caller was signaled while waiting */
         if (result == -5)
         {
             /* Restart start time */
             runningProcess->runTimeStart = read_clock();
-			runningProcess->waiting = 0;
             return -5;
         } 
 	}
@@ -514,6 +508,8 @@ int k_join(int pid, int* p_child_exit_code)
     {
         *p_child_exit_code = targetProcess->exitCode;
     }
+	//cleanup_process(targetProcess); //cleanup child process
+	runningProcess->runTimeStart = read_clock(); //restart start time after wait
 
     return 0;
 }
@@ -614,8 +610,23 @@ void k_exit(int exit_code)
     if (parent != NULL)
     {
         /* Store zombie info */
-		parent->zombiePid = runningProcess->pid;
-        parent->zombieExitCode = exit_code;
+		ZombieNode* newZombie = (ZombieNode*)malloc(sizeof(ZombieNode));
+		newZombie->pid = runningProcess->pid;
+		newZombie->exitCode = exit_code;
+        newZombie->next = NULL;
+        if (parent->zombies == NULL)
+        {
+            parent->zombies = newZombie;
+        }
+        else
+        {
+            ZombieNode* current = parent->zombies;
+            while (current->next != NULL)
+            {
+                current = current->next;
+            }
+            current->next = newZombie;
+		}
 
         /* check if parent is blocked from wait/join and wake if needed */
         if (parent->waiting && parent->status > 10)
@@ -1336,6 +1347,32 @@ Returns - Nothing
 *************************************************************************/
 void cleanup_process(Process* proc)
 {
+	Process* parent = proc->pParent;
+
+	/* Remove from parent's child list */
+    if (parent != NULL)
+    {
+		Process* prev = NULL;
+		Process* current = parent->pChildren;
+
+		while (current != NULL)
+        {
+            if (current == proc)
+            {
+                if (prev == NULL)
+                {
+                    parent->pChildren = current->nextSiblingProcess;
+                }
+                else
+                {
+                    prev->nextSiblingProcess = current->nextSiblingProcess;
+                }
+                break;
+            }
+            prev = current;
+            current = current->nextSiblingProcess;
+        }
+    }
     proc->pid = -1;
     proc->context = NULL;
     proc->pParent = NULL;
