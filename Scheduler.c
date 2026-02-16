@@ -976,6 +976,7 @@ const char* status_name(int st) {
 	case K_WAIT:  return "WAIT BLOCK";
 	case K_JOIN:  return "JOIN BLOCK";
 	case K_EXIT:  return "K_EXIT";
+	case 14:      return "14";
     default:      return "UNKNOWN";
     }
 }
