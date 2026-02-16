@@ -236,7 +236,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     }
     if (proc_slot < 0)
     {
-        enableInterrupts();
+        enableInterrupts(); //may need to look at this for failing test
         console_output(debugFlag, "k_spawn(): No empty slot in process table.\n");
         return -4;
     }
@@ -308,6 +308,34 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     /* Add the process to the ready list. */
     ready_enqueue(pNewProc);
 
+    int currentRunTime = read_clock();
+
+    if (pNewProc != NULL && pNewProc->status == RUNNING)
+    {
+        /* Add CPU time of current process */
+        pNewProc->processRunTime += (currentRunTime - pNewProc->runTimeStart) / 1000;
+
+        int preempt = 0;
+        for (int prio = 5; prio >= pNewProc->priority; prio--)
+        {
+            if (ready_queues[prio] != NULL)
+            {
+                preempt = 1;
+                break;
+            }
+        }
+        if (preempt != 1)
+        {
+            /* reset start time for currently running process */
+            pNewProc->runTimeStart = currentRunTime;
+            return;
+        }
+
+        /* If we get here, we need to preempt the current process because an equal or higher prio was found */
+        pNewProc->status = READY;
+        ready_enqueue(pNewProc);
+    }
+
     enableInterrupts();
 
     return pNewProc->pid;
@@ -367,8 +395,6 @@ int k_wait(int* p_child_exit_code)
             {
                 runningProcess->zombieTail = NULL;
             }
-               
-            free(current);
 
             /* cleanup child process */
             for (int i = 0; i < MAX_PROCESSES; i++)
@@ -734,6 +760,7 @@ void dispatcher()
         runningProcess->status = READY;
         ready_enqueue(runningProcess);
     }
+
     /* Get next process to run*/
     Process* nextProcess = ready_dequeue();
 
@@ -802,6 +829,7 @@ int block(int block_status)
         console_output(debugFlag, "block: function called with a reserved status value.\n", block_status);
         stop(1);
     }
+
     /* Was the process signaled? */
     if (signaled())
     {
@@ -814,7 +842,6 @@ int block(int block_status)
     /* Keep dispatching until process is unblocked */
     while (runningProcess->status == block_status)
     {
-        dispatcher();
         if (signaled())
         {
             return -5;
@@ -1204,12 +1231,6 @@ void ready_enqueue(Process* p)
         }
 		current->nextReadyProcess = p;
     }
-
-    /* will switch to the higher priority process 
-    if (runningProcess && prio > runningProcess->priority)
-    {
-        dispatcher();          
-    } // Remove per Xu */
 }
 
 /**************************************************************************
