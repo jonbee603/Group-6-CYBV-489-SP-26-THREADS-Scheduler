@@ -422,7 +422,7 @@ int k_wait(int* p_child_exit_code)
 int k_join(int pid, int* p_child_exit_code)
 {
     /* Remember which pid we are joining so that the exiting child can wake us up */
-    runningProcess->joinTarget = pid;
+  //  runningProcess->joinTarget = pid;
 
     /* Check if trying to join self or not */
     if (pid == runningProcess->pid)
@@ -459,12 +459,14 @@ int k_join(int pid, int* p_child_exit_code)
     }
     
     /* if child has not extied, block caller*/
-    while (targetProcess->status != QUIT)
+    if (targetProcess->status != QUIT)
     {
         /* update process run time before blocking */
 		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; 
         runningProcess-> waiting = 1;
+        runningProcess->joinTarget = pid;
 		int result = block(K_JOIN);
+        runningProcess->waiting = 0;
 
         /* if caller was signaled while waiting */
         if (result == -5)
@@ -508,7 +510,6 @@ int k_join(int pid, int* p_child_exit_code)
            marks the process as signaled, see the function signaled. Note the documentation in functions
            where a process is blocked and see the required return codes if a process is signaled during its wait
            time. Future iterations of the kernel use this signal to terminate user-level processes.
-
 *************************************************************************/
 int k_kill(int pid, int signal)
 {
@@ -598,6 +599,7 @@ void k_exit(int exit_code)
 		newZombie->pid = runningProcess->pid;
 		newZombie->exitCode = exit_code;
         newZombie->next = NULL;
+
         if (parent->zombies == NULL)
         {
             parent->zombies = newZombie;
@@ -607,6 +609,7 @@ void k_exit(int exit_code)
         {
             parent->zombieTail->next = newZombie;
             parent->zombieTail = newZombie;
+
 		}
 
         /* check if parent is blocked from wait/join and wake if needed */
@@ -623,7 +626,7 @@ void k_exit(int exit_code)
         Process* proc = &processTable[i];
         if (proc->pid != -1 && proc->status == K_JOIN && proc->joinTarget == runningProcess->pid)
         {
-            console_output(debugFlag, "k_exit: unblocking joiner pid %d for target %d\n", proc->pid, runningProcess->pid);
+            //console_output(debugFlag, "k_exit: unblocking joiner pid %d for target %d\n", proc->pid, runningProcess->pid); //testline
             proc->waiting = 0;
             proc->joinTarget = -1;
             unblock(proc->pid);
@@ -947,6 +950,15 @@ uint32_t read_clock()
     return system_clock();
 }
 
+/**************************************************************************
+   Name - status_name()
+
+   Purpose - This function is a helper to convert status numbers to their correct strings
+
+   Parameters - None
+
+   Returns - The correct string
+*************************************************************************/
 const char* status_name(int st) {
     switch (st) {
     case EMPTY:   return "EMPTY";
@@ -1193,11 +1205,11 @@ void ready_enqueue(Process* p)
 		current->nextReadyProcess = p;
     }
 
-    /* will switch to the higher priority process */
+    /* will switch to the higher priority process 
     if (runningProcess && prio > runningProcess->priority)
     {
         dispatcher();          
-    }
+    } // Remove per Xu */
 }
 
 /**************************************************************************
@@ -1340,14 +1352,15 @@ void cleanup_process(Process* proc)
     }
 
     /* Cleanup any left behind zombies */
-    while (proc->zombies) {
+    /*while (proc->zombies)
+    {
         ZombieNode* tmp = proc->zombies;
         proc->zombies = proc->zombies->next;
         free(tmp);
     }
-    proc->zombieTail = NULL;
+    proc->zombieTail = NULL;*/ //may not be needed
 
-    /* Reset the PCB */
+    /* Reset the PCB 
     proc->pid = -1;
     proc->context = NULL;
     proc->pParent = NULL;
@@ -1359,5 +1372,5 @@ void cleanup_process(Process* proc)
     proc->waiting = 0;
 	proc->signaled = 0;
     proc->status = EMPTY;
-    proc->joinTarget = -1;
+    proc->joinTarget = -1;*/ //may not be needed
 }
