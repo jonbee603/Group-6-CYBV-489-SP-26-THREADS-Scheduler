@@ -20,7 +20,8 @@ typedef struct _process
 
 	struct _process* pParent;
 	struct _process* pChildren;
-	ZombieNode* zombies; //Linked list of zombies for this process's children
+	ZombieNode* zombies;				 /* Linked list of zombies for this process's children */
+	ZombieNode* zombieTail;
 
 	char           name[MAXNAME];        /* Process name */
 	char           startArgs[MAXARG];    /* Process arguments */

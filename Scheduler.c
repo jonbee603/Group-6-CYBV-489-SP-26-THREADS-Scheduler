@@ -5,19 +5,6 @@
            Group 6: Lexi Lamaide, Colin Martin, Jonathan Bergeron
 **********************************************************************************/
 
-/*
-Special Notes to pay attention to:
-
-Don't forget to re-enable interrupts
-Incorrect READY/RUNNING transitioning
-Lost tracking on blocked processes
-Improper parent-child cleanup
-
-WEIRD HARD TO DEBUG BEHAVIORS:
-Experiencing deadlock? - block/unblocking issue
-TIME SLICE bugs - priority issue? fairness issues
-*/
-
 #define _CRT_SECURE_NO_WARNINGS
 
 #define NUM_PRIORITIES 6
@@ -29,7 +16,6 @@ TIME SLICE bugs - priority issue? fairness issues
 #define JOINED   5
 #define K_WAIT  11
 #define K_JOIN  12
-#define K_EXIT  13
 
 #include <stdio.h>
 #include <string.h>
@@ -38,11 +24,8 @@ TIME SLICE bugs - priority issue? fairness issues
 #include "Scheduler.h"
 #include "Processes.h"
 
-static Process* readyHead = NULL;
-static Process* readyTail = NULL;
 Process* ready_queues[NUM_PRIORITIES];
 static char argBuffer[MAX_PROCESSES][THREADS_MAX_NAME];
-
 Process processTable[MAX_PROCESSES];
 Process* runningProcess = NULL;
 int nextPid = 1;
@@ -136,9 +119,9 @@ int bootstrap(void* pArgs)
     nextPid = 1;
 
     /* Initialize the clock interrupt handler */
-    interrupt_handler_t* handlers;              //Handlers protoype
-    handlers = get_interrupt_handlers();        //Call get_interrupt_handlers function
-    handlers[THREADS_TIMER_INTERRUPT] = clock_handler; //Set handlers timer interrupt index to timer handler function     
+    interrupt_handler_t* handlers;              
+    handlers = get_interrupt_handlers();       
+    handlers[THREADS_TIMER_INTERRUPT] = clock_handler;   
 
     /* startup a watchdog process */
     result = k_spawn("watchdog", watchdog, NULL, THREADS_MIN_STACK_SIZE, LOWEST_PRIORITY);
@@ -157,7 +140,6 @@ int bootstrap(void* pArgs)
     }
 
     /* Initialized and ready to go!! */
-	//display_process_table();  //test line
 
     /* This should never return since we are not a real process. */
     dispatcher();
@@ -214,10 +196,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     int proc_slot = -1;
     Process* pNewProc = NULL;
 
-    //DebugConsole("k_spawn(): creating process %s\n", name);   //test line
-
     disableInterrupts();
-	//console_output(debugFlag, "Interrupts disabled!\n");      //test line
 
     /* Validate all of the parameters, starting with the name. */
     if (name == NULL)
@@ -244,8 +223,6 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     {
         console_output(debugFlag, "k_spawn(): priority %d out of range.\n", priority);
         return -3;
-        //console_output(debugFlag, "k_spawn(): invalid priority %d. Calling priority clamp\n", priority); //DEPRECATED?
-		//priority = clamp_priority(priority);           //DEPRECATED??
     }
 
     /* Find an empty slot in the process table */
@@ -284,6 +261,8 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
 	pNewProc->signaled = 0;
     pNewProc->exitCode = 0;
     pNewProc->joinTarget = -1;
+    pNewProc->zombies = NULL;
+    pNewProc->zombieTail = NULL;
 
     /* If there is a parent process, add this to the list of children. */
     if (runningProcess != NULL)
@@ -330,10 +309,6 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     ready_enqueue(pNewProc);
 
     enableInterrupts();
-
-    //check_deadlock();                                                                                                             //testline - Added this to test and see if deadlock would return with processes still active
-    //console_output(debugFlag, "k_spawn(): pid=%d, name=%s, priority=%d\n", pNewProc->pid, pNewProc->name, pNewProc->priority);    //test line
-    //display_ready_queues();                                                                                                       //test line
 
     return pNewProc->pid;
 }
@@ -385,8 +360,14 @@ int k_wait(int* p_child_exit_code)
                 *p_child_exit_code = current->exitCode;
             }
 
-            /* Remove node from list */
-            runningProcess->zombies = current->next; //update head of zombies list
+            /* Remove node from list and assign it to the head */
+            runningProcess->zombies = current->next;
+            /* list became empty */
+            if (runningProcess->zombies == NULL)  
+            {
+                runningProcess->zombieTail = NULL;
+            }
+               
             free(current);
 
             /* cleanup child process */
@@ -400,7 +381,8 @@ int k_wait(int* p_child_exit_code)
                 }
             }
 
-            runningProcess->runTimeStart = read_clock(); //restart start time after wait
+            /* Restart start time after wait */
+            runningProcess->runTimeStart = read_clock();
             return pid;
         }
         /* If we get here, we have children but they are not zombies, so we need to wait. */
@@ -479,7 +461,8 @@ int k_join(int pid, int* p_child_exit_code)
     /* if child has not extied, block caller*/
     while (targetProcess->status != QUIT)
     {
-		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; //update process run time before blocking
+        /* update process run time before blocking */
+		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; 
         runningProcess-> waiting = 1;
 		int result = block(K_JOIN);
 
@@ -499,7 +482,6 @@ int k_join(int pid, int* p_child_exit_code)
         *p_child_exit_code = targetProcess->exitCode;
     }
 
-	//cleanup_process(targetProcess); //cleanup child process
     /* restart start time after wait & cleanup join target */
 	runningProcess->runTimeStart = read_clock(); 
     runningProcess->joinTarget = -1;
@@ -608,6 +590,7 @@ void k_exit(int exit_code)
     Process* parent = runningProcess->pParent;
 
     /* If we have a parent, notify it so k_wait() can return the status. */
+    /* As a group, we decided that there is an error with this block of code and the end of k_exit(), but collectively could not figure it out. */
     if (parent != NULL)
     {
         /* Store zombie info */
@@ -618,15 +601,12 @@ void k_exit(int exit_code)
         if (parent->zombies == NULL)
         {
             parent->zombies = newZombie;
+            parent->zombieTail = newZombie;
         }
         else
         {
-            ZombieNode* current = parent->zombies;
-            while (current->next != NULL)
-            {
-                current = current->next;
-            }
-            current->next = newZombie;
+            parent->zombieTail->next = newZombie;
+            parent->zombieTail = newZombie;
 		}
 
         /* check if parent is blocked from wait/join and wake if needed */
@@ -712,7 +692,7 @@ void time_slice()
 
    Returns - Nothing
 
-   TO IMPLEMENT & NOTES:
+   NOTES:
              1. Decides which process goes to run next and then executes that process.
              2. Checks if the current process can continue running:
                 (a) Has it been blocked or quitting?
@@ -724,7 +704,7 @@ void time_slice()
 *************************************************************************/
 void dispatcher()
 {
-    int currentRunTime = read_clock();
+    uint32_t currentRunTime = read_clock();
 
     if (runningProcess != NULL && runningProcess->status == RUNNING)
     {
@@ -742,7 +722,8 @@ void dispatcher()
         }
         if (preempt != 1)
         {
-            runningProcess->runTimeStart = currentRunTime; //reset start time for currently running process
+            /* reset start time for currently running process */
+            runningProcess->runTimeStart = currentRunTime; 
             return;
         }
 
@@ -752,7 +733,6 @@ void dispatcher()
     }
     /* Get next process to run*/
     Process* nextProcess = ready_dequeue();
-    //display_process_table();  //test line
 
     if (nextProcess != NULL)
     {
@@ -828,12 +808,14 @@ int block(int block_status)
     /* Assign status to K_WAIT */
     runningProcess->status = block_status;
 
-    dispatcher();
-
-    /* Check again context switch */
-    if (signaled())
+    /* Keep dispatching until process is unblocked */
+    while (runningProcess->status == block_status)
     {
-        return -5;
+        dispatcher();
+        if (signaled())
+        {
+            return -5;
+        }
     }
 
     /* 0 on success, new process created */
@@ -942,9 +924,9 @@ int read_time()
     {
         /* Current time program has been running in ms */
         int currentRunTime = read_clock();
-		int currentProcessTime = (currentRunTime - runningProcess->runTimeStart) / 1000; //convert to ms
 
-        //console_output(debugFlag,"Current run time for %s is %d\n", runningProcess->name, runningProcess->processRunTime);   //testline
+        /* ms conversion */
+		int currentProcessTime = (currentRunTime - runningProcess->runTimeStart) / 1000;
 
         /* Return run time of currently running process in ms */
         return runningProcess->processRunTime + currentProcessTime;
@@ -975,7 +957,6 @@ const char* status_name(int st) {
     case JOINED:  return "JOINED";
 	case K_WAIT:  return "WAIT BLOCK";
 	case K_JOIN:  return "JOIN BLOCK";
-	case K_EXIT:  return "K_EXIT";
 	case 14:      return "14";
     default:      return "UNKNOWN";
     }
@@ -1018,6 +999,7 @@ void display_process_table()
             }
             /* Get CPU time */
 			int currentRunTime = processTable[i].processRunTime;
+
             /* If the process is currently running, get current time */
 			if (runningProcess != NULL && processTable[i].pid == runningProcess->pid)
             {
@@ -1043,7 +1025,6 @@ void display_process_table()
  *************************************************************************/
 static void watchdog()
 {
-    //DebugConsole("watchdog(): called\n"); //test line
     while (1)
     {
         /* as the system idles here, the timer is to keep the program alive if processes are running */
@@ -1062,7 +1043,6 @@ static void watchdog()
  *************************************************************************/
 static void check_deadlock()
 {
-    //display_process_table();  //testline
     int done = 1;
     /* Begin indexing after watchdog, and if its the only process left, stop on 0. */
     for (int i = 1; i < MAX_PROCESSES; i++)
@@ -1083,7 +1063,6 @@ static void check_deadlock()
     if (done == 1)
     {
         console_output(debugFlag, "All processes completed.\n");
-        //display_process_table();      //testline
         stop(0);
     }
 }
@@ -1240,7 +1219,8 @@ Process* ready_dequeue(void)
 		if (ready_queues[prio] != NULL)                    
         {
 			Process* p = ready_queues[prio];              
-			ready_queues[prio] = p->nextReadyProcess;       
+			ready_queues[prio] = p->nextReadyProcess;      
+
             /* Clear the next pointer of the dequeued process */
 			p->nextReadyProcess = NULL;                     
             return p;
@@ -1295,17 +1275,11 @@ void display_ready_queues(void)
 *************************************************************************/
 static int launch(void* args)
 {
-    //DebugConsole("launch(): started: %s\n", runningProcess->name);    //test line
-
     /* Enable interrupts */
     enableInterrupts();
 
-    //console_output(debugFlag, "Interrupts enabled!\n");               //test line
-
     /* Call the function passed to spawn and capture its return value */
     int rc = runningProcess->entryPoint(runningProcess->args);
-
-    //DebugConsole("Process %d returned to launch\n", runningProcess->pid); //test line
 
     /* Stop the process gracefully */
     k_exit(rc);
@@ -1321,8 +1295,6 @@ static int launch(void* args)
    Parameters - None
 
    Returns - False
-
-   TO IMPLEMENT
 *************************************************************************/
 int check_io_scheduler()
 {
@@ -1366,6 +1338,14 @@ void cleanup_process(Process* proc)
             current = current->nextSiblingProcess;
         }
     }
+
+    /* Cleanup any left behind zombies */
+    while (proc->zombies) {
+        ZombieNode* tmp = proc->zombies;
+        proc->zombies = proc->zombies->next;
+        free(tmp);
+    }
+    proc->zombieTail = NULL;
 
     /* Reset the PCB */
     proc->pid = -1;
