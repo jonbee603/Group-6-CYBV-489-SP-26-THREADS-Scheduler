@@ -308,35 +308,12 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     /* Add the process to the ready list. */
     ready_enqueue(pNewProc);
 
-    int currentRunTime = read_clock();
-
-    if (pNewProc != NULL && pNewProc->status == RUNNING)
-    {
-        /* Add CPU time of current process */
-        pNewProc->processRunTime += (currentRunTime - pNewProc->runTimeStart) / 1000;
-
-        int preempt = 0;
-        for (int prio = 5; prio >= pNewProc->priority; prio--)
-        {
-            if (ready_queues[prio] != NULL)
-            {
-                preempt = 1;
-                break;
-            }
-        }
-        if (preempt != 1)
-        {
-            /* reset start time for currently running process */
-            pNewProc->runTimeStart = currentRunTime;
-            return;
-        }
-
-        /* If we get here, we need to preempt the current process because an equal or higher prio was found */
-        pNewProc->status = READY;
-        ready_enqueue(pNewProc);
-    }
-
     enableInterrupts();
+
+    if (runningProcess && pNewProc->priority >= runningProcess->priority)
+    {
+        dispatcher();
+    }
 
     return pNewProc->pid;
 }
