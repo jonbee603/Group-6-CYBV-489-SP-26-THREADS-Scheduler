@@ -373,7 +373,7 @@ int k_wait(int* p_child_exit_code)
                 runningProcess->zombieTail = NULL;
             }
 
-            /* cleanup child process */
+            /* find the child's PCB and reclaim it */
             for (int i = 0; i < MAX_PROCESSES; i++)
             {
                 Process* child = &processTable[i];
@@ -1349,16 +1349,7 @@ void cleanup_process(Process* proc)
         }
     }
 
-    /* Cleanup any left behind zombies */
-    /*while (proc->zombies)
-    {
-        ZombieNode* tmp = proc->zombies;
-        proc->zombies = proc->zombies->next;
-        free(tmp);
-    }
-    proc->zombieTail = NULL;*/ //may not be needed
-
-    /* Reset the PCB 
+    /* Reset the PCB */
     proc->pid = -1;
     proc->context = NULL;
     proc->pParent = NULL;
@@ -1366,9 +1357,15 @@ void cleanup_process(Process* proc)
     proc->nextReadyProcess = NULL;
     proc->nextSiblingProcess = NULL;
     proc->args = NULL;
+    proc->entryPoint = NULL;
+    proc->context = NULL;
+    proc->priority = 0;
+    proc->processRunTime = 0;
     proc->exitCode = 0;
     proc->waiting = 0;
 	proc->signaled = 0;
     proc->status = EMPTY;
-    proc->joinTarget = -1;*/ //may not be needed
+    proc->joinTarget = -1;
+    proc->zombies = NULL;
+    proc->zombieTail = NULL;
 }
