@@ -333,7 +333,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
              successful creation. Otherwise, the return value must be one
              of the following error codes:
              pid, the PID of the process that exited
-             -1 if the process has no children
+             -1 if the process has no children or zombies*
              -5 if the process was signaled in the join
 
    Notes - The caller does not specify a child process to wait for. The function will return after any child of the
@@ -345,8 +345,8 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
 ************************************************************************ */
 int k_wait(int* p_child_exit_code)
 {
-    /* No children */
-    if (runningProcess->pChildren == NULL)
+    /* No children and no zombies to wait for, so return -1 */
+    if (runningProcess->pChildren == NULL && runningProcess->zombieChildren == NULL)
     {
         return -1;
     }
@@ -372,12 +372,13 @@ int k_wait(int* p_child_exit_code)
             }
 
             /* Cleanup child */
-            //cleanup_process(child);
+            cleanup_process(child);
 
             /* Restart start time after wait */
             runningProcess->runTimeStart = read_clock();
-            return child->pid;
+            return pid;
         }
+
         /* If we get here, we have children but they are not zombies, so we need to wait. */
         if (runningProcess->pChildren != NULL)
         {
