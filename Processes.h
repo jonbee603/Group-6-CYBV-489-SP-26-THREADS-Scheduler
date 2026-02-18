@@ -6,22 +6,16 @@
 **********************************************************************************/
 #pragma once
 
-typedef struct ZombieNode {
-	int pid;
-	int exitCode;
-	struct ZombieNode* next;
-} ZombieNode;
-
-
 typedef struct _process
 {
 	struct _process* nextReadyProcess;
 	struct _process* nextSiblingProcess;
+	struct _process* nextZombieProcess;
 
 	struct _process* pParent;
 	struct _process* pChildren;
-	ZombieNode* zombies;				 /* Linked list of zombies for this process's children */
-	ZombieNode* zombieTail;
+	struct _process* zombieChildren;				 /* Linked list of zombies for this process's children */
+	struct _process* zombieTail;
 
 	char           name[MAXNAME];        /* Process name */
 	char           startArgs[MAXARG];    /* Process arguments */

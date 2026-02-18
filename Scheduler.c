@@ -34,8 +34,8 @@ int debugFlag = 1;
 /* Group 6 Prototypes */
 int bootstrap(void*);
 int k_spawn(char*, int (*entryPoint)(void*), void*, int, int);
-int k_wait(int*); 
-int k_join(int, int*); 
+int k_wait(int*);
+int k_join(int, int*);
 int k_kill(int, int);
 void k_exit(int);
 int k_getpid(void);
@@ -43,7 +43,7 @@ void time_slice();
 void dispatcher();
 int signaled(void);
 int block(int);
-int unblock(int); 
+int unblock(int);
 int get_start_time();
 int read_time();
 uint32_t read_clock(void);
@@ -54,7 +54,7 @@ static void check_deadlock();
 static inline void disableInterrupts();
 static inline void enableInterrupts();
 static void DebugConsole(char*, ...);
-static void clock_handler(char*, uint8_t, uint32_t); 
+static void clock_handler(char*, uint8_t, uint32_t);
 void ready_queue_init(void);
 void ready_enqueue(Process*);
 Process* ready_dequeue(void);
@@ -112,16 +112,16 @@ int bootstrap(void* pArgs)
         processTable[i].waiting = 0;
         processTable[i].joinTarget = -1;
     }
-    
+
     /* Initialize the Ready list, etc. */
     ready_queue_init();
     runningProcess = NULL;
     nextPid = 1;
 
     /* Initialize the clock interrupt handler */
-    interrupt_handler_t* handlers;              
-    handlers = get_interrupt_handlers();       
-    handlers[THREADS_TIMER_INTERRUPT] = clock_handler;   
+    interrupt_handler_t* handlers;
+    handlers = get_interrupt_handlers();
+    handlers[THREADS_TIMER_INTERRUPT] = clock_handler;
 
     /* startup a watchdog process */
     result = k_spawn("watchdog", watchdog, NULL, THREADS_MIN_STACK_SIZE, LOWEST_PRIORITY);
@@ -189,7 +189,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     /* Verifies we are in kernel mode */
     if ((get_psr() & PSR_KERNEL_MODE) == 0)
     {
-		console_output(debugFlag, "Kernel mode expected, but function called in user mode.\n");
+        console_output(debugFlag, "Kernel mode expected, but function called in user mode.\n");
         stop(1);
     }
 
@@ -251,17 +251,17 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     pNewProc->args = arg;
 
     pNewProc->status = READY;
-	pNewProc->processRunTime = 0;
-	pNewProc->runTimeStart = 0;
+    pNewProc->processRunTime = 0;
+    pNewProc->runTimeStart = 0;
     pNewProc->pChildren = NULL;
     pNewProc->nextSiblingProcess = NULL;
     pNewProc->nextReadyProcess = NULL;
 
     pNewProc->waiting = 0;
-	pNewProc->signaled = 0;
+    pNewProc->signaled = 0;
     pNewProc->exitCode = 0;
     pNewProc->joinTarget = -1;
-    pNewProc->zombies = NULL;
+    pNewProc->zombieChildren = NULL;
     pNewProc->zombieTail = NULL;
 
     /* If there is a parent process, add this to the list of children. */
@@ -277,10 +277,10 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     }
 
     /* Copies the arg string into the per-slot buffer */
-    if (arg != NULL) 
+    if (arg != NULL)
     {
         size_t len = strlen((char*)arg);
-        if (len >= THREADS_MAX_NAME) 
+        if (len >= THREADS_MAX_NAME)
         {
             console_output(debugFlag, "k_spawn(): argument string too long.\n");
             enableInterrupts();
@@ -289,7 +289,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
         strcpy(argBuffer[proc_slot], (char*)arg);
         pNewProc->args = argBuffer[proc_slot];
     }
-    else 
+    else
     {
         pNewProc->args = NULL;
     }
@@ -339,8 +339,8 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
    Notes - The caller does not specify a child process to wait for. The function will return after any child of the
            caller terminates. If one or more child processes has already exited when this function is called, then
            the function should return right away without waiting and with the information (pid and exit code) from
-           one already terminated child. A parent process must call this function once for every child that was 
-           spawned to ensure the proper termination of a process and to clean up any system resources that the child 
+           one already terminated child. A parent process must call this function once for every child that was
+           spawned to ensure the proper termination of a process and to clean up any system resources that the child
            process is or was using.
 ************************************************************************ */
 int k_wait(int* p_child_exit_code)
@@ -353,56 +353,60 @@ int k_wait(int* p_child_exit_code)
 
     while (1)
     {
-        ZombieNode* prev = NULL;
-		ZombieNode* current = runningProcess->zombies;
+        Process* child = runningProcess->zombieChildren;
 
         /* Search for any zombie child */
-        if (current != NULL)
+        if (child != NULL)
         {
-            int pid = current->pid;
-            if (p_child_exit_code)
-            {
-                *p_child_exit_code = current->exitCode;
-            }
-
-            /* Remove node from list and assign it to the head */
-            runningProcess->zombies = current->next;
-            /* list became empty */
-            if (runningProcess->zombies == NULL)  
+            // Remove child from zombie list
+            runningProcess->zombieChildren = child->nextZombieProcess;
+            if (runningProcess->zombieChildren == NULL)
             {
                 runningProcess->zombieTail = NULL;
             }
 
-            /* find the child's PCB and reclaim it */
-            for (int i = 0; i < MAX_PROCESSES; i++)
+            int pid = child->pid;
+            if (p_child_exit_code)
             {
-                Process* child = &processTable[i];
-                if (child->pid == pid)
-                {
-                    cleanup_process(child);
-                    break;
-                }
+                *p_child_exit_code = child->exitCode;
             }
+
+            /* Cleanup child */
+            //cleanup_process(child);
 
             /* Restart start time after wait */
             runningProcess->runTimeStart = read_clock();
-            return pid;
+            return child->pid;
         }
         /* If we get here, we have children but they are not zombies, so we need to wait. */
-
-        /* Update process run time before blocking */
-		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; 
-        runningProcess->waiting = 1;
-        int result = block(K_WAIT);
-        runningProcess->waiting = 0;
-
-        /* Process was signaled while waiting */
-        if (result == -5)
+        if (runningProcess->pChildren != NULL)
         {
-            /* Restart start time */
-            runningProcess->runTimeStart = read_clock();
-            return -5;
+            //console_output(debugFlag, "k_wait: process %d has children but no zombies, going to wait\n", runningProcess->pid); //testline
+            /* Update process run time before blocking */
+            runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000;
+            runningProcess->waiting = 1;
+            /* Test line
+            console_output(debugFlag, "k_wait: process %d is waiting for a child to quit\n", runningProcess->pid);
+            display_process_table();
+            display_ready_queues();
+            */
+            int result = block(K_WAIT);
+            /*Test line
+            console_output(debugFlag, "k_wait: process %d unblocked from wait with result %d\n", runningProcess->pid, result);
+            display_process_table();
+            display_ready_queues();
+            */
+            runningProcess->waiting = 0;
+
+            /* Process was signaled while waiting */
+            if (result == -5)
+            {
+                /* Restart start time */
+                runningProcess->runTimeStart = read_clock();
+                return -5;
+            }
         }
+
     }
 }
 
@@ -431,7 +435,7 @@ int k_join(int pid, int* p_child_exit_code)
     if (pid == runningProcess->pid)
     {
         /* halts the kernel with error 0x1 */
-		console_output(debugFlag, "join: process attempted to join itself.\n");
+        console_output(debugFlag, "join: process attempted to join itself.\n");
         stop(1);
     }
 
@@ -450,25 +454,36 @@ int k_join(int pid, int* p_child_exit_code)
     if (targetProcess == NULL)
     {
         /* halts the kernel with error 0x1 */
-		console_output(debugFlag, "join: process attempted to join non-existing process.\n");
+        console_output(debugFlag, "join: process attempted to join non-existing process.\n");
         stop(1);
     }
 
     /* Do not allow joining the parent only */
     if (targetProcess == runningProcess->pParent)
     {
-		console_output(debugFlag, "join: process attempted to join parent.\n");
+        console_output(debugFlag, "join: process attempted to join parent.\n");
         stop(2);
     }
-    
+
     /* if child has not extied, block caller*/
     if (targetProcess->status != QUIT)
     {
         /* update process run time before blocking */
-		runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000; 
-        runningProcess-> waiting = 1;
+        runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000;
+        runningProcess->waiting = 1;
+        runningProcess->status = K_JOIN;
         runningProcess->joinTarget = pid;
-		int result = block(K_JOIN);
+        /* Test line
+        console_output(debugFlag, "k_join: process %d is joining on pid %d\n", runningProcess->pid, pid);
+        display_process_table();
+        display_ready_queues();
+        */
+        int result = block(K_JOIN);
+        /* Test line
+        console_output(debugFlag, "k_join: process %d unblocked from join on pid %d with result %d\n", runningProcess->pid, pid, result);
+        display_process_table();
+        display_ready_queues();
+        */
         runningProcess->waiting = 0;
 
         /* if caller was signaled while waiting */
@@ -478,17 +493,17 @@ int k_join(int pid, int* p_child_exit_code)
             runningProcess->runTimeStart = read_clock();
             runningProcess->joinTarget = -1;
             return -5;
-        } 
-	}
+        }
+    }
 
-	/* if we get here, the child has quit and we can return the exit code */
+    /* if we get here, the child has quit and we can return the exit code */
     if (p_child_exit_code != NULL)
     {
         *p_child_exit_code = targetProcess->exitCode;
     }
 
     /* restart start time after wait & cleanup join target */
-	runningProcess->runTimeStart = read_clock(); 
+    runningProcess->runTimeStart = read_clock();
     runningProcess->joinTarget = -1;
 
     return 0;
@@ -530,14 +545,14 @@ int k_kill(int pid, int signal)
     /* If we can't find the process, halt kernel */
     if (targetProcess == NULL)
     {
-		console_output(debugFlag, "kill: process with pid %d not found.\n", pid);
+        console_output(debugFlag, "kill: process with pid %d not found.\n", pid);
         stop(1);
     }
 
     /* If we have invalid signal, halt kernel */
     if (signal != SIG_TERM)
     {
-		console_output(debugFlag, "kill: invalid signal %d.\n", signal);
+        console_output(debugFlag, "kill: invalid signal %d.\n", signal);
         stop(1);
     }
 
@@ -564,13 +579,19 @@ int k_kill(int pid, int signal)
 *************************************************************************/
 void k_exit(int exit_code)
 {
+    /* Test line
+    console_output(FALSE, "k_exit() called for pid %d (%s)\n", runningProcess->pid, runningProcess->name);
+    display_process_table();
+    display_ready_queues();
+    */
+
     /* Verifies we are in kernel mode */
     if ((get_psr() & PSR_KERNEL_MODE) == 0)
     {
-		console_output(debugFlag, "Kernel mode expected, but function called in user mode.\n");
+        console_output(debugFlag, "Kernel mode expected, but function called in user mode.\n");
         stop(1);
     }
-	if (runningProcess->pChildren != NULL)
+    if (runningProcess->pChildren != NULL)
     {
         console_output(debugFlag, "quit(): Process with active children attempting to quit\n");
         stop(1);
@@ -578,7 +599,7 @@ void k_exit(int exit_code)
 
     if (signaled())
     {
-		exit_code = -5;
+        exit_code = -5;
     }
     int currentRunTime = read_clock();
 
@@ -593,35 +614,53 @@ void k_exit(int exit_code)
 
     Process* parent = runningProcess->pParent;
 
-    /* If we have a parent, notify it so k_wait() can return the status. */
-    /* As a group, we decided that there is an error with this block of code and the end of k_exit(), but collectively could not figure it out. */
+    /* Remove from parent's child list */
     if (parent != NULL)
     {
-        /* Store zombie info */
-		ZombieNode* newZombie = (ZombieNode*)malloc(sizeof(ZombieNode));
-		newZombie->pid = runningProcess->pid;
-		newZombie->exitCode = exit_code;
-        newZombie->next = NULL;
+        Process* prev = NULL;
+        Process* current = parent->pChildren;
 
-        if (parent->zombies == NULL)
+        while (current != NULL)
         {
-            parent->zombies = newZombie;
-            parent->zombieTail = newZombie;
+            if (current == runningProcess)
+            {
+                if (prev == NULL)
+                {
+                    parent->pChildren = current->nextSiblingProcess;
+                }
+                else
+                {
+                    prev->nextSiblingProcess = current->nextSiblingProcess;
+                }
+                break;
+            }
+            prev = current;
+            current = current->nextSiblingProcess;
+        }
+
+        /* Store zombie info in parent's zombie list */
+        runningProcess->nextZombieProcess = NULL;
+
+        if (parent->zombieChildren == NULL)
+        {
+            parent->zombieChildren = runningProcess;
+            parent->zombieTail = runningProcess;
         }
         else
         {
-            parent->zombieTail->next = newZombie;
-            parent->zombieTail = newZombie;
+            parent->zombieTail->nextZombieProcess = runningProcess;
+            parent->zombieTail = runningProcess;
 
-		}
+        }
 
-        /* check if parent is blocked from wait/join and wake if needed */
-        if (parent->waiting && parent->status > 10)
+        /* check if parent is blocked from wait and wake if needed */
+        if (parent->waiting && parent->status == K_WAIT)
         {
-			parent->waiting = 0;
-			unblock(parent->pid);
+            parent->waiting = 0;
+            unblock(parent->pid);
         }
     }
+
 
     /* Wake up every process that is blocked in a k_join() */
     for (int i = 0; i < MAX_PROCESSES; i++)
@@ -729,7 +768,7 @@ void dispatcher()
         if (preempt != 1)
         {
             /* reset start time for currently running process */
-            runningProcess->runTimeStart = currentRunTime; 
+            runningProcess->runTimeStart = currentRunTime;
             return;
         }
 
@@ -817,13 +856,14 @@ int block(int block_status)
     runningProcess->status = block_status;
 
     /* Keep dispatching until process is unblocked */
-    while (runningProcess->status == block_status)
+    dispatcher();
+
+
+    if (signaled())
     {
-        if (signaled())
-        {
-            return -5;
-        }
+        return -5;
     }
+
 
     /* 0 on success, new process created */
     return 0;
@@ -922,7 +962,7 @@ int get_start_time()
 int read_time()
 {
     /* If running process is null stop the kernel */
-    if (runningProcess == NULL) 
+    if (runningProcess == NULL)
     {
         console_output(debugFlag, "read_time(): invalid behavior, no runningProcess. Halting kernel...\n");
         stop(1);
@@ -933,7 +973,7 @@ int read_time()
         int currentRunTime = read_clock();
 
         /* ms conversion */
-		int currentProcessTime = (currentRunTime - runningProcess->runTimeStart) / 1000;
+        int currentProcessTime = (currentRunTime - runningProcess->runTimeStart) / 1000;
 
         /* Return run time of currently running process in ms */
         return runningProcess->processRunTime + currentProcessTime;
@@ -971,9 +1011,9 @@ const char* status_name(int st) {
     case BLOCKED: return "BLOCKED";
     case QUIT:    return "QUIT";
     case JOINED:  return "JOINED";
-	case K_WAIT:  return "WAIT BLOCK";
-	case K_JOIN:  return "JOIN BLOCK";
-	case 14:      return "14";
+    case K_WAIT:  return "WAIT BLOCK";
+    case K_JOIN:  return "JOIN BLOCK";
+    case 14:      return "14";
     default:      return "UNKNOWN";
     }
 }
@@ -993,46 +1033,46 @@ void display_process_table()
 {
     /* Title for table print */
     console_output(debugFlag, "\nPID     Parent   Priority  Status        # Kids   CPUtime  Name    \n");
-        for (int i = 0; i < MAX_PROCESSES; i++)
+    for (int i = 0; i < MAX_PROCESSES; i++)
+    {
+        /* Handles parent PID */
+        int parentPID = -1;
+        if (processTable[i].pid != -1)
         {
-            /* Handles parent PID */
-            int parentPID = -1;
-            if (processTable[i].pid != -1)
+            if (processTable[i].pParent != NULL)
             {
-                if (processTable[i].pParent != NULL)
-                {
-                    parentPID = processTable[i].pParent->pid;
-                }
-            }
-
-            /* Handles child PID */
-            int numChildren = 0;
-            Process* child = processTable[i].pChildren;
-            while (child != NULL)
-            {
-                numChildren++;
-                child = child->nextSiblingProcess;
-            }
-            /* Get CPU time */
-			int currentRunTime = processTable[i].processRunTime;
-
-            /* If the process is currently running, get current time */
-			if (runningProcess != NULL && processTable[i].pid == runningProcess->pid)
-            {
-				currentRunTime += (read_clock() - runningProcess->runTimeStart) / 1000;
-            }
-            if (processTable[i].pid != -1)
-            {
-                console_output(debugFlag, "%-5d   %-6d   %-8d   %-13s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, currentRunTime, processTable[i].name);
+                parentPID = processTable[i].pParent->pid;
             }
         }
+
+        /* Handles child PID */
+        int numChildren = 0;
+        Process* child = processTable[i].pChildren;
+        while (child != NULL)
+        {
+            numChildren++;
+            child = child->nextSiblingProcess;
+        }
+        /* Get CPU time */
+        int currentRunTime = processTable[i].processRunTime;
+
+        /* If the process is currently running, get current time */
+        if (runningProcess != NULL && processTable[i].pid == runningProcess->pid)
+        {
+            currentRunTime += (read_clock() - runningProcess->runTimeStart) / 1000;
+        }
+        if (processTable[i].pid != -1)
+        {
+            console_output(debugFlag, "%-5d   %-6d   %-8d   %-13s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, currentRunTime, processTable[i].name);
+        }
+    }
 }
 
 /**************************************************************************
    Name - watchdog()
 
-   Purpose - The watchdoog keeps the system going when all other processes 
-   are blocked.  It can be used to detect when the system is shutting down 
+   Purpose - The watchdoog keeps the system going when all other processes
+   are blocked.  It can be used to detect when the system is shutting down
    as well as when a deadlock condition arises.
 
    Parameters - None
@@ -1074,7 +1114,7 @@ static void check_deadlock()
                 break;
             }
         }
-    } 
+    }
 
     if (done == 1)
     {
@@ -1087,7 +1127,7 @@ static void check_deadlock()
    Name - disableInterrupts()
 
    Purpose - Disables system interrupts by clearing the interrupt enable bit
-   in the process status register (PSR). This function is used while 
+   in the process status register (PSR). This function is used while
    performing critical sections that must not be interrupted.
 
    Parameters - None
@@ -1174,10 +1214,10 @@ static void clock_handler(char* deviceName, uint8_t command, uint32_t status)
 *************************************************************************/
 void ready_queue_init(void)
 {
-    for(int i = 0; i < NUM_PRIORITIES; i++)
+    for (int i = 0; i < NUM_PRIORITIES; i++)
     {
         ready_queues[i] = NULL;
-	}
+    }
 }
 
 /**************************************************************************
@@ -1201,12 +1241,12 @@ void ready_enqueue(Process* p)
     }
     else
     {
-		Process* current = ready_queues[prio];
+        Process* current = ready_queues[prio];
         while (current->nextReadyProcess != NULL)
         {
             current = current->nextReadyProcess;
         }
-		current->nextReadyProcess = p;
+        current->nextReadyProcess = p;
     }
 }
 
@@ -1223,20 +1263,20 @@ void ready_enqueue(Process* p)
 Process* ready_dequeue(void)
 {
     /* Dequeues from highest priority queue first */
-	for (int prio = NUM_PRIORITIES - 1; prio >= 0; prio--)
+    for (int prio = NUM_PRIORITIES - 1; prio >= 0; prio--)
     {
         /* If queue is not empty get process at head and update the head for the next process */
-		if (ready_queues[prio] != NULL)                    
+        if (ready_queues[prio] != NULL)
         {
-			Process* p = ready_queues[prio];              
-			ready_queues[prio] = p->nextReadyProcess;      
+            Process* p = ready_queues[prio];
+            ready_queues[prio] = p->nextReadyProcess;
 
             /* Clear the next pointer of the dequeued process */
-			p->nextReadyProcess = NULL;                     
+            p->nextReadyProcess = NULL;
             return p;
         }
     }
-	return NULL;
+    return NULL;
 }
 
 /**************************************************************************
@@ -1249,27 +1289,27 @@ Process* ready_dequeue(void)
 
    Returns - Nothing
 *************************************************************************/
-void display_ready_queues(void) 
+void display_ready_queues(void)
 {
-	console_output(debugFlag, "\nREADY QUEUES:\n");
-    for (int prio = 0; prio < NUM_PRIORITIES; prio++) 
+    console_output(debugFlag, "\nREADY QUEUES:\n");
+    for (int prio = 0; prio < NUM_PRIORITIES; prio++)
     {
-        console_output(debugFlag,"Priority %d: ", prio);
+        console_output(debugFlag, "Priority %d: ", prio);
         Process* current = ready_queues[prio];
 
-        if (current == NULL) 
+        if (current == NULL)
         {
-            console_output(debugFlag,"EMPTY\n");
+            console_output(debugFlag, "EMPTY\n");
             continue;
         }
 
-        while (current != NULL) 
+        while (current != NULL)
         {
-            console_output(debugFlag,"[PID=%d %s] -> ", current->pid, current->name);
+            console_output(debugFlag, "[PID=%d %s] -> ", current->pid, current->name);
             current = current->nextReadyProcess;
         }
 
-        console_output(debugFlag,"NULL\n");
+        console_output(debugFlag, "NULL\n");
     }
 }
 
@@ -1322,33 +1362,6 @@ Returns - Nothing
 *************************************************************************/
 void cleanup_process(Process* proc)
 {
-	Process* parent = proc->pParent;
-
-	/* Remove from parent's child list */
-    if (parent != NULL)
-    {
-		Process* prev = NULL;
-		Process* current = parent->pChildren;
-
-		while (current != NULL)
-        {
-            if (current == proc)
-            {
-                if (prev == NULL)
-                {
-                    parent->pChildren = current->nextSiblingProcess;
-                }
-                else
-                {
-                    prev->nextSiblingProcess = current->nextSiblingProcess;
-                }
-                break;
-            }
-            prev = current;
-            current = current->nextSiblingProcess;
-        }
-    }
-
     /* Reset the PCB */
     proc->pid = -1;
     proc->context = NULL;
@@ -1356,6 +1369,7 @@ void cleanup_process(Process* proc)
     proc->pChildren = NULL;
     proc->nextReadyProcess = NULL;
     proc->nextSiblingProcess = NULL;
+    proc->nextZombieProcess = NULL;
     proc->args = NULL;
     proc->entryPoint = NULL;
     proc->context = NULL;
@@ -1363,9 +1377,9 @@ void cleanup_process(Process* proc)
     proc->processRunTime = 0;
     proc->exitCode = 0;
     proc->waiting = 0;
-	proc->signaled = 0;
+    proc->signaled = 0;
     proc->status = EMPTY;
     proc->joinTarget = -1;
-    proc->zombies = NULL;
+    proc->zombieChildren = NULL;
     proc->zombieTail = NULL;
 }
