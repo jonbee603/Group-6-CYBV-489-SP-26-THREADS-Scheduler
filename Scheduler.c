@@ -110,6 +110,7 @@ int bootstrap(void* pArgs)
         processTable[i].args = NULL;
         processTable[i].exitCode = 0;
         processTable[i].waiting = 0;
+        processTable[i].waitingSignaled = 0;
         processTable[i].joinTarget = -1;
     }
 
@@ -236,7 +237,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     }
     if (proc_slot < 0)
     {
-        enableInterrupts(); //may need to look at this for failing test
+        enableInterrupts();
         console_output(debugFlag, "k_spawn(): No empty slot in process table.\n");
         return -4;
     }
@@ -245,7 +246,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
 
     /* Setup the entry in the process table. (PCB initialization) */
     strcpy(pNewProc->name, name);
-    pNewProc->pid = (short)nextPid++;
+    pNewProc->pid = nextPid++;
     pNewProc->priority = priority;
     pNewProc->entryPoint = entry_point;
     pNewProc->args = arg;
@@ -258,6 +259,7 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     pNewProc->nextReadyProcess = NULL;
 
     pNewProc->waiting = 0;
+    pNewProc->waitingSignaled = 0;
     pNewProc->signaled = 0;
     pNewProc->exitCode = 0;
     pNewProc->joinTarget = -1;
@@ -358,14 +360,15 @@ int k_wait(int* p_child_exit_code)
         /* Search for any zombie child */
         if (child != NULL)
         {
-            // Remove child from zombie list
+            /* Remove child from zombie list */
             runningProcess->zombieChildren = child->nextZombieProcess;
             if (runningProcess->zombieChildren == NULL)
             {
                 runningProcess->zombieTail = NULL;
             }
 
-            int pid = child->pid;
+            /* Saves the child pid before cleanup */
+            int child_pid = child->pid;
             if (p_child_exit_code)
             {
                 *p_child_exit_code = child->exitCode;
@@ -376,7 +379,16 @@ int k_wait(int* p_child_exit_code)
 
             /* Restart start time after wait */
             runningProcess->runTimeStart = read_clock();
-            return pid;
+
+            /* If the process was signalled while waiting,
+               return -5 instead of the child PID. */
+            if (runningProcess->waitingSignaled)
+            {
+                runningProcess->waitingSignaled = 0;
+                return -5;
+            }
+
+            return child_pid;
         }
 
         /* If we get here, we have children but they are not zombies, so we need to wait. */
@@ -402,12 +414,28 @@ int k_wait(int* p_child_exit_code)
             /* Process was signaled while waiting */
             if (result == -5)
             {
+                /* Reap a zombie child if one is already present – this
+                   gives the caller the exit code of the child even
+                   though the wait itself returned -5. */
+                Process* zombieChild = runningProcess->zombieChildren;
+                if (zombieChild != NULL)
+                {
+                    runningProcess->zombieChildren = zombieChild->nextZombieProcess;
+                    if (runningProcess->zombieChildren == NULL)
+                    {
+                        runningProcess->zombieTail = NULL;
+                    }
+                    if (p_child_exit_code)
+                    {
+                        *p_child_exit_code = zombieChild->exitCode;
+                    }
+                    cleanup_process(zombieChild);
+                }
                 /* Restart start time */
                 runningProcess->runTimeStart = read_clock();
                 return -5;
             }
         }
-
     }
 }
 
@@ -430,7 +458,7 @@ int k_wait(int* p_child_exit_code)
 int k_join(int pid, int* p_child_exit_code)
 {
     /* Remember which pid we are joining so that the exiting child can wake us up */
-  //  runningProcess->joinTarget = pid;
+    runningProcess->joinTarget = pid;
 
     /* Check if trying to join self or not */
     if (pid == runningProcess->pid)
@@ -592,12 +620,13 @@ void k_exit(int exit_code)
         console_output(debugFlag, "Kernel mode expected, but function called in user mode.\n");
         stop(1);
     }
-    if (runningProcess->pChildren != NULL)
+    if (runningProcess->pChildren != NULL && !signaled())
     {
         console_output(debugFlag, "quit(): Process with active children attempting to quit\n");
         stop(1);
     }
 
+    /* If no more live children, quit */
     if (signaled())
     {
         exit_code = -5;
@@ -615,7 +644,7 @@ void k_exit(int exit_code)
 
     Process* parent = runningProcess->pParent;
 
-    /* Remove from parent's child list */
+    /* Remove ourselves from the parent's child list and add ourselves to the parent's zombie list. */
     if (parent != NULL)
     {
         Process* prev = NULL;
@@ -651,7 +680,6 @@ void k_exit(int exit_code)
         {
             parent->zombieTail->nextZombieProcess = runningProcess;
             parent->zombieTail = runningProcess;
-
         }
 
         /* check if parent is blocked from wait and wake if needed */
@@ -661,7 +689,6 @@ void k_exit(int exit_code)
             unblock(parent->pid);
         }
     }
-
 
     /* Wake up every process that is blocked in a k_join() */
     for (int i = 0; i < MAX_PROCESSES; i++)
@@ -850,7 +877,17 @@ int block(int block_status)
     /* Was the process signaled? */
     if (signaled())
     {
-        return -5;
+        /* If we are about to block on a wait, remember that we were
+           signalled while waiting – we still block normally. */
+        if (block_status == K_WAIT)
+        {
+            runningProcess->waitingSignaled = 1;
+        }
+        else
+        {
+            /* For a join we return -5 immediately */
+            return -5;
+        }
     }
 
     /* Assign status to K_WAIT */
@@ -859,12 +896,18 @@ int block(int block_status)
     /* Keep dispatching until process is unblocked */
     dispatcher();
 
-
     if (signaled())
     {
+        if (block_status == K_WAIT)
+        {
+            /* We intentionally do NOT return -5 – we already set
+               waitingSignaled above and will return -5 after the
+               wait completes. */
+            return 0;
+        }
+
         return -5;
     }
-
 
     /* 0 on success, new process created */
     return 0;
@@ -1033,7 +1076,7 @@ const char* status_name(int st) {
 void display_process_table()
 {
     /* Title for table print */
-    console_output(debugFlag, "\nPID     Parent   Priority  Status        # Kids   CPUtime  Name    \n");
+    console_output(debugFlag, "PID     Parent   Priority  Status        # Kids   CPUtime  Name    \n");
     for (int i = 0; i < MAX_PROCESSES; i++)
     {
         /* Handles parent PID */
@@ -1064,7 +1107,7 @@ void display_process_table()
         }
         if (processTable[i].pid != -1)
         {
-            console_output(debugFlag, "%-5d   %-6d   %-8d   %-13s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, currentRunTime, processTable[i].name);
+            console_output(debugFlag, "%-5d   %-6d   %-7d   %-11s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, currentRunTime, processTable[i].name);
         }
     }
 }
@@ -1378,6 +1421,7 @@ void cleanup_process(Process* proc)
     proc->processRunTime = 0;
     proc->exitCode = 0;
     proc->waiting = 0;
+    proc->waitingSignaled = 0;
     proc->signaled = 0;
     proc->status = EMPTY;
     proc->joinTarget = -1;
