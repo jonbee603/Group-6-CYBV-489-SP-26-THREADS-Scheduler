@@ -217,12 +217,12 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     }
     if (stack_size < THREADS_MIN_STACK_SIZE)
     {
-        console_output(debugFlag, "k_spawn(): stack_size %d < THREADS_MIN_STACK_SIZE.\n", stack_size);
+        console_output(debugFlag, "spawn(): Stack size is too small.\n", stack_size);
         return -2;
     }
     if (priority < 0 || priority > HIGHEST_PRIORITY)
     {
-        console_output(debugFlag, "k_spawn(): priority %d out of range.\n", priority);
+        console_output(debugFlag, "spawn(): Priority %d out of range.\n", priority);
         return -3;
     }
 
@@ -238,7 +238,6 @@ int k_spawn(char* name, int (*entry_point)(void*), void* arg, int stack_size, in
     if (proc_slot < 0)
     {
         enableInterrupts();
-        console_output(debugFlag, "k_spawn(): No empty slot in process table.\n");
         return -4;
     }
 
@@ -468,7 +467,7 @@ int k_join(int pid, int* p_child_exit_code)
     if (targetProcess == NULL)
     {
         /* halts the kernel with error 0x1 */
-        console_output(debugFlag, "join: process attempted to join non-existing process.\n");
+        console_output(debugFlag, "join: attempting to join a process that does not exist.\n");
         stop(1);
     }
 
