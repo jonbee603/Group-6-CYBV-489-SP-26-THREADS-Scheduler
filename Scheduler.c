@@ -374,8 +374,10 @@ int k_wait(int* p_child_exit_code)
                 *p_child_exit_code = child->exitCode;
             }
 
-            /* Cleanup child */
-            cleanup_process(child);
+            /* Keep the child alive – only mark the slot as free. */
+            child->pid = -1;                 /* free the slot */
+            child->status = EMPTY;           /* make it an empty process */
+            child->nextZombieProcess = NULL; /* clean up zombie pointer */
 
             /* Restart start time after wait */
             runningProcess->runTimeStart = read_clock();
@@ -414,23 +416,6 @@ int k_wait(int* p_child_exit_code)
             /* Process was signaled while waiting */
             if (result == -5)
             {
-                /* Reap a zombie child if one is already present – this
-                   gives the caller the exit code of the child even
-                   though the wait itself returned -5. */
-                Process* zombieChild = runningProcess->zombieChildren;
-                if (zombieChild != NULL)
-                {
-                    runningProcess->zombieChildren = zombieChild->nextZombieProcess;
-                    if (runningProcess->zombieChildren == NULL)
-                    {
-                        runningProcess->zombieTail = NULL;
-                    }
-                    if (p_child_exit_code)
-                    {
-                        *p_child_exit_code = zombieChild->exitCode;
-                    }
-                    cleanup_process(zombieChild);
-                }
                 /* Restart start time */
                 runningProcess->runTimeStart = read_clock();
                 return -5;
