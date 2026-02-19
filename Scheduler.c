@@ -4,18 +4,18 @@
                     CYBV 489 - SP 26: Professor Li Xu
            Group 6: Lexi Lamaide, Colin Martin, Jonathan Bergeron
 **********************************************************************************/
-
 #define _CRT_SECURE_NO_WARNINGS
 
-#define NUM_PRIORITIES 6
-#define EMPTY    0
-#define READY    1
-#define RUNNING  2
-#define BLOCKED  3
-#define QUIT     4
-#define JOINED   5
-#define K_WAIT  11
-#define K_JOIN  12
+#define NUM_PRIORITIES 6    /* 0-5 are valid priorities */
+
+#define EMPTY    0          /* No process (slot empty) */
+#define READY    1          /* Ready to run */
+#define RUNNING  2          /* Currently running */
+#define BLOCKED  3          /* Blocked on a resource */
+#define QUIT     4          /* Process has exited */
+#define JOINED   5          /* Parent has joined this process */
+#define K_WAIT  11          /* Wait block status (>10) */
+#define K_JOIN  12          /* Join block status (>10) */
 
 #include <stdio.h>
 #include <string.h>
@@ -24,12 +24,12 @@
 #include "Scheduler.h"
 #include "Processes.h"
 
-Process* ready_queues[NUM_PRIORITIES];
-static char argBuffer[MAX_PROCESSES][THREADS_MAX_NAME];
-Process processTable[MAX_PROCESSES];
-Process* runningProcess = NULL;
-int nextPid = 1;
-int debugFlag = 1;
+Process* ready_queues[NUM_PRIORITIES];                      /* Array of ready queues – one per priority level */
+static char argBuffer[MAX_PROCESSES][THREADS_MAX_NAME];     /* Per‑process argument buffer */
+Process processTable[MAX_PROCESSES];                        /* Global process table (PCB array) */
+Process* runningProcess = NULL;                             /* Pointer to the currently running process */
+int nextPid = 1;                                            /* Next PID to allocate */
+int debugFlag = 1;                                          /* 1 = debug output on, 0 = off */
 
 /* Group 6 Prototypes */
 int bootstrap(void*);
@@ -41,26 +41,27 @@ void k_exit(int);
 int k_getpid(void);
 void time_slice();
 void dispatcher();
-int signaled(void);
 int block(int);
 int unblock(int);
-int get_start_time();
-int read_time();
 uint32_t read_clock(void);
 void display_process_table(void);
-const char* status_name(int);
+int signaled(void);
+int read_time();
+
+static int get_start_time();
+static const char* status_name(int);
 static void watchdog();
 static void check_deadlock();
 static inline void disableInterrupts();
 static inline void enableInterrupts();
 static void DebugConsole(char*, ...);
 static void clock_handler(char*, uint8_t, uint32_t);
-void ready_queue_init(void);
-void ready_enqueue(Process*);
-Process* ready_dequeue(void);
-void display_ready_queues(void);
+static void ready_queue_init(void);
+static void ready_enqueue(Process*);
+static Process* ready_dequeue(void);
+static void display_ready_queues(void);
 static int launch(void*);
-void cleanup_process(Process* proc);
+static void cleanup_process(Process* proc);
 
 /* DO NOT REMOVE */
 extern int SchedulerEntryPoint(void* pArgs);
@@ -678,6 +679,7 @@ void k_exit(int exit_code)
 *************************************************************************/
 int k_getpid()
 {
+    /* Return the PID of the currently running process. If no process is running (runningProcess == NULL) return -1. */
     if (runningProcess != NULL)
     {
         return runningProcess->pid;
@@ -730,7 +732,6 @@ void time_slice()
                 (c) Has it been time-sliced?
             3. Selects a new process and perform a context switch in order to get ir running.
             4. Follow Scheduling policy
-
 *************************************************************************/
 void dispatcher()
 {
@@ -784,29 +785,6 @@ void dispatcher()
 }
 
 /*************************************************************************
-   Name - signaled()
-
-   Purpose - Checks whether the current process has been signaled
-
-   Parameters - None
-
-   Returns - 1 if signaled, 0 if otherwise
-
-   Side Effects/Use Cases - Used by k_wait(), k_join(), and block()
-*************************************************************************/
-int signaled()
-{
-    if (runningProcess->signaled)
-    {
-        return 1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-/*************************************************************************
    Name - block()
 
    Purpose - This function blocks the calling process and sets the processes status in the process
@@ -820,7 +798,6 @@ int signaled()
 
    Notes - If this function is called with a value equal to or less than 10, the kernel should be halted with a code of 1:
             Use integer values 0-10 to keep track of the state of processes in the process table.
-
 *************************************************************************/
 int block(int block_status)
 {
@@ -918,70 +895,6 @@ int unblock(int pid)
 }
 
 /*************************************************************************
-   Name - get_start_time()
-
-   Purpose - This function returns the start time of the process in microseconds.
-
-   Parameters - None
-
-   Returns - The function returns the calling process’s start time.
-
-   Notes - Halts the kernel if illegally called
-*************************************************************************/
-int get_start_time()
-{
-    /* Is a process running? */
-    if (runningProcess != NULL)
-    {
-        if (runningProcess->runTimeStart == 0)
-        {
-            /* Reads clock and divides by 1000 for time in ms */
-            runningProcess->runTimeStart = read_clock();
-        }
-        return runningProcess->runTimeStart;
-    }
-    else
-    {
-        /* Halts the kernel, no running process, this is illegal */
-        console_output(debugFlag, "get_start_time(): invalid behavior, no runningProcess. Halting kernel...\n");
-        stop(1);
-    }
-}
-
-/*************************************************************************
-   Name - cpu_time()/read_time() naming convention as required by test30
-
-   Purpose - The cpu_time function returns the amount of time in milliseconds that the
-                current process has spent on the CPU.
-
-   Parameters - None
-
-   Returns - The function returns the calling process’s cpu time
-
-   Notes - Halts the kernel with illegal activity
-*************************************************************************/
-int read_time()
-{
-    /* If running process is null stop the kernel */
-    if (runningProcess == NULL)
-    {
-        console_output(debugFlag, "read_time(): invalid behavior, no runningProcess. Halting kernel...\n");
-        stop(1);
-    }
-    if (runningProcess != NULL)
-    {
-        /* Current time program has been running in ms */
-        int currentRunTime = read_clock();
-
-        /* ms conversion */
-        int currentProcessTime = (currentRunTime - runningProcess->runTimeStart) / 1000;
-
-        /* Return run time of currently running process in ms */
-        return runningProcess->processRunTime + currentProcessTime;
-    }
-}
-
-/*************************************************************************
    Name - read_clock()
 
    Purpose - This function returns the current value of the system clock using the THREADS system_clock function.
@@ -1004,7 +917,7 @@ uint32_t read_clock()
 
    Returns - The correct string
 *************************************************************************/
-const char* status_name(int st) {
+static const char* status_name(int st) {
     switch (st) {
     case EMPTY:   return "EMPTY";
     case READY:   return "READY";
@@ -1066,6 +979,93 @@ void display_process_table()
         {
             console_output(debugFlag, "%-5d   %-6d   %-7d   %-11s   %-6d   %-7d  %s\n", processTable[i].pid, parentPID, processTable[i].priority, status_name(processTable[i].status), numChildren, currentRunTime, processTable[i].name);
         }
+    }
+}
+
+/*************************************************************************
+   Name - signaled()
+
+   Purpose - Checks whether the current process has been signaled
+
+   Parameters - None
+
+   Returns - 1 if signaled, 0 if otherwise
+
+   Side Effects/Use Cases - Used by k_wait(), k_join(), and block()
+*************************************************************************/
+int signaled()
+{
+    if (runningProcess->signaled)
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+/*************************************************************************
+   Name - cpu_time()/read_time() naming convention as required by test30
+
+   Purpose - The cpu_time function returns the amount of time in milliseconds that the
+                current process has spent on the CPU.
+
+   Parameters - None
+
+   Returns - The function returns the calling process’s cpu time
+
+   Notes - Halts the kernel with illegal activity
+*************************************************************************/
+int read_time()
+{
+    /* If running process is null stop the kernel */
+    if (runningProcess == NULL)
+    {
+        console_output(debugFlag, "read_time(): invalid behavior, no runningProcess. Halting kernel...\n");
+        stop(1);
+    }
+    if (runningProcess != NULL)
+    {
+        /* Current time program has been running in ms */
+        int currentRunTime = read_clock();
+
+        /* ms conversion */
+        int currentProcessTime = (currentRunTime - runningProcess->runTimeStart) / 1000;
+
+        /* Return run time of currently running process in ms */
+        return runningProcess->processRunTime + currentProcessTime;
+    }
+}
+
+/*************************************************************************
+   Name - get_start_time()
+
+   Purpose - This function returns the start time of the process in microseconds.
+
+   Parameters - None
+
+   Returns - The function returns the calling process’s start time.
+
+   Notes - Halts the kernel if illegally called
+*************************************************************************/
+static int get_start_time()
+{
+    /* Is a process running? */
+    if (runningProcess != NULL)
+    {
+        if (runningProcess->runTimeStart == 0)
+        {
+            /* Reads clock and divides by 1000 for time in ms */
+            runningProcess->runTimeStart = read_clock();
+        }
+        return runningProcess->runTimeStart;
+    }
+    else
+    {
+        /* Halts the kernel, no running process, this is illegal */
+        console_output(debugFlag, "get_start_time(): invalid behavior, no runningProcess. Halting kernel...\n");
+        stop(1);
     }
 }
 
@@ -1213,7 +1213,7 @@ static void clock_handler(char* deviceName, uint8_t command, uint32_t status)
 
    Returns - Nothing
 *************************************************************************/
-void ready_queue_init(void)
+static void ready_queue_init(void)
 {
     for (int i = 0; i < NUM_PRIORITIES; i++)
     {
@@ -1231,7 +1231,7 @@ void ready_queue_init(void)
 
    Returns - Nothing
 *************************************************************************/
-void ready_enqueue(Process* p)
+static void ready_enqueue(Process* p)
 {
     int prio = p->priority;
     p->nextReadyProcess = NULL;
@@ -1261,7 +1261,7 @@ void ready_enqueue(Process* p)
 
    Returns - Pointer to the dequeued process, or NULL if no ready process.
 *************************************************************************/
-Process* ready_dequeue(void)
+static Process* ready_dequeue(void)
 {
     /* Dequeues from highest priority queue first */
     for (int prio = NUM_PRIORITIES - 1; prio >= 0; prio--)
@@ -1290,7 +1290,7 @@ Process* ready_dequeue(void)
 
    Returns - Nothing
 *************************************************************************/
-void display_ready_queues(void)
+static void display_ready_queues(void)
 {
     console_output(debugFlag, "\nREADY QUEUES:\n");
     for (int prio = 0; prio < NUM_PRIORITIES; prio++)
@@ -1341,7 +1341,7 @@ static int launch(void* args)
 /**************************************************************************
    Name - check_io_scheduler()
 
-   Purpose - Checks IO. Since it is not implemented it returns false.
+   Purpose - Checks IO. Since there is no IO yet, it returns false. (0)
 
    Parameters - None
 
@@ -1361,7 +1361,7 @@ Parameters - proc, the process to clean up
 
 Returns - Nothing
 *************************************************************************/
-void cleanup_process(Process* proc)
+static void cleanup_process(Process* proc)
 {
     /* Reset the PCB */
     proc->pid = -1;
