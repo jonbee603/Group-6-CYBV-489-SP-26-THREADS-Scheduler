@@ -14,7 +14,7 @@ typedef struct _process
 
 	struct _process* pParent;
 	struct _process* pChildren;
-	struct _process* zombieChildren;				 /* Linked list of zombies for this process's children */
+	struct _process* zombieChildren;	 /* Linked list of zombies for this process's children */
 	struct _process* zombieTail;
 
 	char           name[MAXNAME];        /* Process name */
@@ -28,7 +28,7 @@ typedef struct _process
 	int            status;               /* READY, QUIT, BLOCKED, etc. */
 	int			   processRunTime;       /* Total time process has run */
 	int			   runTimeStart;		 /* used in cpu_time(), get_start_time() */
-	void* args;							 /* argument passed to entryPoint */
+	void*          args;				 /* argument passed to entryPoint */
 	int            exitCode;			 /* this process's exit code */
 	int            waiting;              /* 1 if blocked in k_wait */
 	int			   waitingSignaled;		 /* 1 if signaled while waiting on k_wait */

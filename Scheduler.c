@@ -687,6 +687,16 @@ void k_exit(int exit_code)
         }
     }
 
+    /* parent unblocked from k_wait gets priority to run immediately. */
+    if (parent && parent->waiting && parent->status == K_WAIT)
+    {
+        parent->waiting = 0;
+        int saved_priority = parent->priority;
+        parent->priority = 5;                    /* boost to highest */
+        unblock(parent->pid);                    /* enqueue at top */
+        parent->priority = saved_priority;            /* restore original */
+    }
+
     /* Child exiting, switch to next ready process */
     dispatcher();
 
@@ -884,12 +894,11 @@ int block(int block_status)
     {
         if (block_status == K_WAIT)
         {
-            /* We intentionally do NOT return -5 – we already set
-               waitingSignaled above and will return -5 after the
-               wait completes. */
+            /* Record that we were signaled while waiting; k_wait will see the flag */
+            runningProcess->waitingSignaled = 1;
             return 0;
         }
-
+        /* join-blocking case */
         return -5;
     }
 
@@ -941,6 +950,13 @@ int unblock(int pid)
 
     /* Send to the queue */
     ready_enqueue(targetProcess);
+
+    /* may context‑switch to the child */
+    if (runningProcess && targetProcess->priority >= runningProcess->priority)
+    {
+        dispatcher();
+    }
+
     return 0;
 }
 
