@@ -478,7 +478,7 @@ int k_join(int pid, int* p_child_exit_code)
         stop(2);
     }
 
-    /* if child has not extied, block caller*/
+    /* if child has not exited, block caller*/
     if (targetProcess->status != QUIT)
     {
         /* update process run time before blocking */
@@ -665,14 +665,8 @@ void k_exit(int exit_code)
             parent->zombieTail->nextZombieProcess = runningProcess;
             parent->zombieTail = runningProcess;
         }
-
-        /* check if parent is blocked from wait and wake if needed */
-        if (parent->waiting && parent->status == K_WAIT)
-        {
-            parent->waiting = 0;
-            unblock(parent->pid);
-        }
     }
+    
 
     /* Wake up every process that is blocked in a k_join() */
     for (int i = 0; i < MAX_PROCESSES; i++)
@@ -696,7 +690,7 @@ void k_exit(int exit_code)
         unblock(parent->pid);                    /* enqueue at top */
         parent->priority = saved_priority;            /* restore original */
     }
-
+	
     /* Child exiting, switch to next ready process */
     dispatcher();
 
