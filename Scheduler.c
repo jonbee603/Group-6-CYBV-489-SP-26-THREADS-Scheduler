@@ -398,7 +398,7 @@ int k_wait(int* p_child_exit_code)
             //console_output(debugFlag, "k_wait: process %d has children but no zombies, going to wait\n", runningProcess->pid); //testline
             /* Update process run time before blocking */
             runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000;
-            runningProcess->waiting = 1;
+            //runningProcess->waiting = 1;
             /* Test line
             console_output(debugFlag, "k_wait: process %d is waiting for a child to quit\n", runningProcess->pid);
             display_process_table();
@@ -410,7 +410,7 @@ int k_wait(int* p_child_exit_code)
             display_process_table();
             display_ready_queues();
             */
-            runningProcess->waiting = 0;
+            //runningProcess->waiting = 0;
 
             /* Process was signaled while waiting */
             if (result == -5)
@@ -483,7 +483,7 @@ int k_join(int pid, int* p_child_exit_code)
     {
         /* update process run time before blocking */
         runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000;
-        runningProcess->waiting = 1;
+        //runningProcess->waiting = 1;
         runningProcess->status = K_JOIN;
         runningProcess->joinTarget = pid;
         /* Test line
@@ -497,7 +497,7 @@ int k_join(int pid, int* p_child_exit_code)
         display_process_table();
         display_ready_queues();
         */
-        runningProcess->waiting = 0;
+        //runningProcess->waiting = 0;
 
         /* if caller was signaled while waiting */
         if (result == -5)
@@ -682,9 +682,9 @@ void k_exit(int exit_code)
     }
 
     /* parent unblocked from k_wait gets priority to run immediately. */
-    if (parent && parent->waiting && parent->status == K_WAIT)
+    if (parent && parent->status == K_WAIT)
     {
-        parent->waiting = 0;
+        //parent->waiting = 0;
         int saved_priority = parent->priority;
         parent->priority = 5;                    /* boost to highest */
         unblock(parent->pid);                    /* enqueue at top */
@@ -945,12 +945,12 @@ int unblock(int pid)
     /* Send to the queue */
     ready_enqueue(targetProcess);
 
-    /* may context‑switch to the child */
+    /* may context‑switch to the child 
     if (runningProcess && targetProcess->priority >= runningProcess->priority)
     {
-        dispatcher();
+        //dispatcher(); dispatching here broke test 13
     }
-
+    */
     return 0;
 }
 
