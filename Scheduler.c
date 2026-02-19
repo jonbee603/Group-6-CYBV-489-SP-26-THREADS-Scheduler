@@ -395,22 +395,10 @@ int k_wait(int* p_child_exit_code)
         /* If we get here, we have children but they are not zombies, so we need to wait. */
         if (runningProcess->pChildren != NULL)
         {
-            //console_output(debugFlag, "k_wait: process %d has children but no zombies, going to wait\n", runningProcess->pid); //testline
             /* Update process run time before blocking */
             runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000;
-            //runningProcess->waiting = 1;
-            /* Test line
-            console_output(debugFlag, "k_wait: process %d is waiting for a child to quit\n", runningProcess->pid);
-            display_process_table();
-            display_ready_queues();
-            */
+           
             int result = block(K_WAIT);
-            /*Test line
-            console_output(debugFlag, "k_wait: process %d unblocked from wait with result %d\n", runningProcess->pid, result);
-            display_process_table();
-            display_ready_queues();
-            */
-            //runningProcess->waiting = 0;
 
             /* Process was signaled while waiting */
             if (result == -5)
@@ -483,21 +471,10 @@ int k_join(int pid, int* p_child_exit_code)
     {
         /* update process run time before blocking */
         runningProcess->processRunTime += (read_clock() - runningProcess->runTimeStart) / 1000;
-        //runningProcess->waiting = 1;
         runningProcess->status = K_JOIN;
         runningProcess->joinTarget = pid;
-        /* Test line
-        console_output(debugFlag, "k_join: process %d is joining on pid %d\n", runningProcess->pid, pid);
-        display_process_table();
-        display_ready_queues();
-        */
+        
         int result = block(K_JOIN);
-        /* Test line
-        console_output(debugFlag, "k_join: process %d unblocked from join on pid %d with result %d\n", runningProcess->pid, pid, result);
-        display_process_table();
-        display_ready_queues();
-        */
-        //runningProcess->waiting = 0;
 
         /* if caller was signaled while waiting */
         if (result == -5)
@@ -592,12 +569,6 @@ int k_kill(int pid, int signal)
 *************************************************************************/
 void k_exit(int exit_code)
 {
-    /* Test line
-    console_output(FALSE, "k_exit() called for pid %d (%s)\n", runningProcess->pid, runningProcess->name);
-    display_process_table();
-    display_ready_queues();
-    */
-
     /* Verifies we are in kernel mode */
     if ((get_psr() & PSR_KERNEL_MODE) == 0)
     {
@@ -674,7 +645,6 @@ void k_exit(int exit_code)
         Process* proc = &processTable[i];
         if (proc->pid != -1 && proc->status == K_JOIN && proc->joinTarget == runningProcess->pid)
         {
-            //console_output(debugFlag, "k_exit: unblocking joiner pid %d for target %d\n", proc->pid, runningProcess->pid); //testline
             proc->waiting = 0;
             proc->joinTarget = -1;
             unblock(proc->pid);
@@ -684,7 +654,6 @@ void k_exit(int exit_code)
     /* parent unblocked from k_wait gets priority to run immediately. */
     if (parent && parent->status == K_WAIT)
     {
-        //parent->waiting = 0;
         int saved_priority = parent->priority;
         parent->priority = 5;                    /* boost to highest */
         unblock(parent->pid);                    /* enqueue at top */
@@ -945,12 +914,6 @@ int unblock(int pid)
     /* Send to the queue */
     ready_enqueue(targetProcess);
 
-    /* may context‑switch to the child 
-    if (runningProcess && targetProcess->priority >= runningProcess->priority)
-    {
-        //dispatcher(); dispatching here broke test 13
-    }
-    */
     return 0;
 }
 
